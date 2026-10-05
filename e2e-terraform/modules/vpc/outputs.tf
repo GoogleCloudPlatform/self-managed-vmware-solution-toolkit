@@ -57,8 +57,8 @@ output "forward_zone_dns_name" {
 }
 
 output "forward_zone_id" {
-  value       = length(google_dns_managed_zone.forward_zone) > 0 ? google_dns_managed_zone.forward_zone[0].id : null
-  description = "The ID of the forward managed DNS zone (null if not created)"
+  value       = var.create_dns_zones ? (length(google_dns_managed_zone.forward_zone) > 0 ? google_dns_managed_zone.forward_zone[0].id : null) : (length(data.google_dns_managed_zone.existing_forward_zone) > 0 ? data.google_dns_managed_zone.existing_forward_zone[0].id : null)
+  description = "The ID of the forward managed DNS zone (null if not created or referenced)"
 }
 
 output "reverse_zone_name" {
@@ -72,8 +72,8 @@ output "reverse_zone_dns_name" {
 }
 
 output "reverse_zone_id" {
-  value       = length(google_dns_managed_zone.reverse_zone) > 0 ? google_dns_managed_zone.reverse_zone[0].id : null
-  description = "The ID of the reverse managed DNS zone (null if not created)"
+  value       = var.create_dns_zones ? (length(google_dns_managed_zone.reverse_zone) > 0 ? google_dns_managed_zone.reverse_zone[0].id : null) : (length(data.google_dns_managed_zone.existing_reverse_zone) > 0 ? data.google_dns_managed_zone.existing_reverse_zone[0].id : null)
+  description = "The ID of the reverse managed DNS zone (null if not created or referenced)"
 }
 
 output "dns_policy_name" {
