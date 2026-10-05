@@ -122,6 +122,13 @@ data "google_compute_resource_policy" "existing_policy" {
   project = var.project_id
   name    = local.effective_placement_policy_name
   region  = var.region
+
+  lifecycle {
+    postcondition {
+      condition     = self.id != null
+      error_message = "The input placement policy '${local.effective_placement_policy_name}' does not exist in project '${var.project_id}' region '${var.region}'."
+    }
+  }
 }
 
 # ==============================================================================
