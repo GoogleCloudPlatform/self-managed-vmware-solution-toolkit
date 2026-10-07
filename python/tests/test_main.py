@@ -608,5 +608,77 @@ class TestMain(unittest.TestCase):
       os.remove(cfg_path)
 
 
+  @mock.patch("vcf_deployer.main.load_config")
+  @mock.patch("vcf_deployer.main.gcp_client.GCPClient")
+  @mock.patch("vcf_deployer.main.validator.PreDeploymentValidator")
+  @mock.patch("vcf_deployer.main.esxi_client.ESXiClient")
+  @mock.patch("vcf_deployer.main.network_setup.NetworkManager")
+  @mock.patch("vcf_deployer.main.vsan_setup.VSANManager")
+  @mock.patch("vcf_deployer.main.vm_deployer.VMDeployer")
+  @mock.patch("vcf_deployer.main.password_resetter.PasswordResetter")
+  def test_run_pipeline_forwards_discovered_ova_sha256_to_deploy_ova(
+      self,
+      mock_pwd_mgr,
+      mock_vm_mgr,
+      mock_vsan_mgr,
+      mock_net_mgr,
+      mock_esxi_cli,
+      mock_val_cls,
+      mock_gcp_cls,
+      mock_load_cfg,
+  ):
+    """Verifies run_pipeline forwards automatically discovered OVA SHA-256 to deploy_ova."""
+    del mock_pwd_mgr, mock_vsan_mgr, mock_esxi_cli, mock_gcp_cls
+    vcf_cfg = models.VCFDeploymentConfig(
+        target_gce_node="esxi-1",
+        vcf_appliance_root_password_secret="vcf-root",
+        vcf_appliance_local_user="vcf",
+        vcf_appliance_local_user_password_secret="vcf-local",
+        vcf_installer_fqdn="sddc-manager.lab.local",
+        vcf_installer_ip_source={"forwarding_rule": "fr-1"},
+        offline_depot_subnet_cidr="10.0.100.0/29",
+    )
+    mock_load_cfg.return_value = models.DeployerConfig(
+        project="p",
+        zone="z",
+        gce_nodes=["esxi-1"],
+        esxi_root_password_secret="esxi-root",
+        vcf_deployment_config=vcf_cfg,
+    )
+    discovered_sha = "a1b2c3d4" * 8
+    mock_val_cls.return_value.validate_and_extract.return_value = (
+        models.ValidationContext(
+            esxi_nodes={},
+            new_esxi_root_password="NewESXiRoot123!",
+            target_esxi_ip="10.0.0.5",
+            vcf_installer_ip="10.0.0.50",
+            vcf_installer_ova_url="https://depot/vcf.ova",
+            vlan_id=100,
+            port_group_name="vlan-100-a1b2",
+            sddc_manager_netmask="255.255.255.0",
+            sddc_manager_gateway="10.0.0.1",
+            vcf_vm_name="sddc-manager",
+            vcf_domain="lab.local",
+            vcf_searchpath="lab.local",
+            ssl_thumbprint="AA:BB:CC",
+            vcf_appliance_root_password="VCFRootP@ssword123!",
+            vcf_appliance_local_password="VCFLocalP@ssword123!",
+            vcf_installer_ova_sha256=discovered_sha,
+        )
+    )
+    mock_net_mgr.return_value.configure_networking.return_value = "vlan-100-a1b2"
+    mock_vm_mgr.return_value.deploy_ova.return_value = mock.MagicMock()
+
+    exit_code = main_mod.run_pipeline("config.json")
+    self.assertEqual(exit_code, 0)
+    mock_vm_mgr.return_value.deploy_ova.assert_called_once_with(
+        vcf_installer_ova_url="https://depot/vcf.ova",
+        ssl_thumbprint="AA:BB:CC",
+        port_group_name="vlan-100-a1b2",
+        vcf_vm_name="sddc-manager",
+        expected_ova_sha256=discovered_sha,
+    )
+
+
 if __name__ == "__main__":
   unittest.main()

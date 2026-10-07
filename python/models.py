@@ -172,6 +172,7 @@ class ValidationContext:
   vcf_appliance_local_user: Optional[str] = "admin"
   dns_server: Optional[str] = None
   drift_manager_p4sa_email: Optional[str] = None
+  vcf_installer_ova_sha256: Optional[str] = None
 
 
 # ==============================================================================

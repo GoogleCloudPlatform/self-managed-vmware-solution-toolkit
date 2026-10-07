@@ -172,6 +172,14 @@ class TestConstants(unittest.TestCase):
         "/PROD/COMP/SDDC_MANAGER_VCF/",
     )
     self.assertEqual(
+        constants.ValidationRules.DEPOT_CATALOG_PATH,
+        "/PROD/metadata/productVersionCatalog/v1/productVersionCatalog.json",
+    )
+    self.assertEqual(
+        constants.ValidationRules.DEPOT_MANIFEST_PATH,
+        "/PROD/metadata/manifest/v1/vcfManifest.json",
+    )
+    self.assertEqual(
         constants.ValidationRules.ESXI_ROOT_PASSWORD_MIN_LEN, 7
     )
     self.assertEqual(
@@ -182,6 +190,13 @@ class TestConstants(unittest.TestCase):
     )
     self.assertEqual(
         constants.ValidationRules.VCF_LOCAL_PASSWORD_MIN_LEN, 12
+    )
+    self.assertTrue(hasattr(constants.ValidationRules, "SHA256_HEX_PATTERN"))
+    self.assertTrue(
+        hasattr(constants.ValidationRules, "OVA_MANIFEST_ENTRY_PATTERN")
+    )
+    self.assertTrue(
+        hasattr(constants.ValidationRules, "PEM_CERTIFICATE_PATTERN")
     )
 
   def test_vsan_constants(self):
@@ -300,5 +315,6 @@ class TestConstants(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
 
 

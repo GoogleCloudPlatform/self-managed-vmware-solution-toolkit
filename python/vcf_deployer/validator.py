@@ -8,11 +8,13 @@ clients. Produces an immutable ValidationContext.
 
 import concurrent.futures
 import ipaddress
+import json
 import logging
+import os
 import re
 import secrets
-import ssl
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+import urllib.parse
 import urllib.request
 
 from clients import gcp_client as gcp_client_mod
@@ -160,6 +162,17 @@ class PreDeploymentValidator:
             " address."
         ) from exc
 
+    # 9b. Automatically discover expected VCF installer OVA SHA-256 digest from offline depot
+    region = string_utils.extract_region_from_zone(target_details.zone)
+    depot_fqdn_host = string_utils.get_depot_host_template().format(
+        region=region
+    )
+    ova_sha256 = self._fetch_ova_sha256_from_depot(
+        ova_url,
+        fqdn_host=depot_fqdn_host,
+        expected_thumbprint=thumbprint,
+    )
+
     # 10. Authorize GCVE Drift Manager Service Agent for real-time drift reconciliation
     p4sa_email = self.gcp.ensure_drift_manager_p4sa_iam(self.config.project)
 
@@ -187,6 +200,7 @@ class PreDeploymentValidator:
         vcf_appliance_local_user=vcf_appliance_local_user,
         dns_server=vcf_cfg.dns_server,
         drift_manager_p4sa_email=p4sa_email,
+        vcf_installer_ova_sha256=ova_sha256,
     )
 
   def _inspect_single_node(
@@ -414,7 +428,7 @@ class PreDeploymentValidator:
     req = urllib.request.Request(index_url, headers=headers)
 
     try:
-      ssl_ctx = ssl._create_unverified_context()
+      ssl_ctx = network_utils.create_depot_ssl_context(fqdn_host=fqdn_host)
       with urllib.request.urlopen(
           req,
           context=ssl_ctx,
@@ -452,3 +466,177 @@ class PreDeploymentValidator:
     )
     logger.info("Inferred VCF installer OVA URL: %s", ova_url)
     return ova_url
+
+  @classmethod
+  def _extract_ova_sha256_from_catalog_json(
+      cls, data: Any, ova_filename: str
+  ) -> Optional[str]:
+    """Recursively searches a depot metadata JSON payload for the OVA SHA-256."""
+    if isinstance(data, dict):
+      file_val = (
+          data.get("fileName")
+          or data.get("filename")
+          or data.get("file")
+          or ""
+      )
+      if (
+          isinstance(file_val, str)
+          and os.path.basename(file_val) == ova_filename
+      ):
+        explicit_sha256 = data.get("sha256") or data.get("sha256Checksum")
+        if isinstance(explicit_sha256, str) and explicit_sha256.strip():
+          cleaned = explicit_sha256.strip().lower()
+          if not re.match(
+              constants.ValidationRules.SHA256_HEX_PATTERN, cleaned
+          ):
+            raise models.ValidationError(
+                "Malformed SHA-256 digest in offline depot catalog for"
+                f" '{ova_filename}': '{explicit_sha256}'"
+            )
+          return cleaned
+
+        checksum = data.get("checksum") or data.get("hash")
+        raw_checksum_type = data.get("checksumType") or data.get("hashType")
+        checksum_type = (
+            str(raw_checksum_type).strip().upper()
+            if raw_checksum_type is not None
+            else ""
+        )
+        if isinstance(checksum, str) and checksum.strip():
+          cleaned = checksum.strip().lower()
+          if checksum_type:
+            if "SHA256" in checksum_type or "SHA-256" in checksum_type:
+              if not re.match(
+                  constants.ValidationRules.SHA256_HEX_PATTERN, cleaned
+              ):
+                raise models.ValidationError(
+                    "Malformed SHA-256 digest in offline depot catalog for"
+                    f" '{ova_filename}': '{checksum}'"
+                )
+              return cleaned
+          elif re.match(constants.ValidationRules.SHA256_HEX_PATTERN, cleaned):
+            return cleaned
+      for value in data.values():
+        found = cls._extract_ova_sha256_from_catalog_json(value, ova_filename)
+        if found:
+          return found
+    elif isinstance(data, list):
+      for item in data:
+        found = cls._extract_ova_sha256_from_catalog_json(item, ova_filename)
+        if found:
+          return found
+    return None
+
+  def _fetch_ova_sha256_from_depot(
+      self,
+      ova_url: str,
+      fqdn_host: Optional[str] = None,
+      expected_thumbprint: Optional[str] = None,
+  ) -> Optional[str]:
+    """Automatically resolves the expected OVA SHA-256 from the offline depot.
+
+    Queries the offline depot's productVersionCatalog.json, vcfManifest.json,
+    and a fallback sidecar <ova_url>.sha256 checksum file.
+
+    Args:
+        ova_url: Full HTTPS URL to the target OVA artifact on the offline depot.
+        fqdn_host: Optional Host header value when connecting via PSC IP.
+        expected_thumbprint: Optional SHA-256 SSL certificate thumbprint to pin.
+
+    Returns:
+        Lowercase 64-character hex SHA-256 string if found, or None if absent
+        (in which case deployment still verifies the OVA's embedded .mf manifest
+        and .cert X.509 cryptographic signature).
+
+    Raises:
+        models.ValidationError: If a catalog entry or .sha256 file is present
+        but contains a malformed SHA-256 digest.
+    """
+    parsed = urllib.parse.urlparse(ova_url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    ova_filename = os.path.basename(parsed.path)
+    headers = {
+        "User-Agent": constants.VMDeployerDefaults.HTTP_USER_AGENT,
+    }
+    if fqdn_host:
+      headers["Host"] = fqdn_host
+    elif parsed.hostname:
+      headers["Host"] = parsed.hostname
+
+    ssl_ctx = network_utils.create_depot_ssl_context(
+        fqdn_host=fqdn_host or parsed.hostname,
+        expected_thumbprint=expected_thumbprint,
+    )
+
+    # 1. Check offline depot metadata catalogs (productVersionCatalog.json / vcfManifest.json)
+    for metadata_path in (
+        constants.ValidationRules.DEPOT_CATALOG_PATH,
+        constants.ValidationRules.DEPOT_MANIFEST_PATH,
+    ):
+      catalog_url = f"{base_url}{metadata_path}"
+      req = urllib.request.Request(catalog_url, headers=headers)
+      try:
+        with urllib.request.urlopen(
+            req,
+            context=ssl_ctx,
+            timeout=constants.ValidationRules.DEPOT_INDEX_TIMEOUT_SECONDS,
+        ) as resp:
+          if getattr(resp, "status", 200) != 200:
+            continue
+          raw_body = resp.read().decode("utf-8", errors="replace").strip()
+        if not raw_body:
+          continue
+        catalog_data = json.loads(raw_body)
+        sha256_hex = self._extract_ova_sha256_from_catalog_json(
+            catalog_data, ova_filename
+        )
+        if sha256_hex:
+          logger.info(
+              "Discovered expected OVA SHA-256 digest for '%s' from depot"
+              " catalog '%s': %s",
+              ova_filename,
+              catalog_url,
+              sha256_hex,
+          )
+          return sha256_hex
+      except models.ValidationError:
+        raise
+      except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.debug(
+            "Could not resolve OVA SHA-256 from depot catalog '%s': %s",
+            catalog_url,
+            exc,
+        )
+
+    # 2. Fallback: check sidecar <ova_url>.sha256 checksum file
+    sha256_url = f"{ova_url}.sha256"
+    req = urllib.request.Request(sha256_url, headers=headers)
+    try:
+      with urllib.request.urlopen(
+          req,
+          context=ssl_ctx,
+          timeout=constants.ValidationRules.DEPOT_INDEX_TIMEOUT_SECONDS,
+      ) as resp:
+        if getattr(resp, "status", 200) != 200:
+          return None
+        raw_text = resp.read().decode("utf-8", errors="replace").strip()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+      logger.debug(
+          "No sidecar .sha256 checksum found at '%s': %s", sha256_url, exc
+      )
+      return None
+
+    if not raw_text:
+      return None
+    first_token = raw_text.split()[0].strip().lower()
+    if not re.match(constants.ValidationRules.SHA256_HEX_PATTERN, first_token):
+      raise models.ValidationError(
+          f"Malformed SHA-256 digest in depot checksum file '{sha256_url}':"
+          f" '{raw_text}'"
+      )
+    logger.info(
+        "Discovered expected OVA SHA-256 digest from depot '%s': %s",
+        sha256_url,
+        first_token,
+    )
+    return first_token

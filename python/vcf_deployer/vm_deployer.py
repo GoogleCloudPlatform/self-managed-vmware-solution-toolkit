@@ -6,18 +6,31 @@ extraConfig environment injection via ReconfigVM_Task), and Phase 2e
 (idempotent power activation and guest networking telemetry polling).
 """
 
+import datetime
+import hashlib
 import logging
+import os
+import re
 import shlex
 import ssl
 import tarfile
 import time
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+import urllib.parse
 import urllib.request
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID
 import paramiko
 
 from clients import esxi_client as esxi_client_mod
 import constants
 import models
+from utils import network_utils
 
 try:
   from pyVmomi import vim
@@ -26,6 +39,28 @@ except ImportError:
 
 
 logger = logging.getLogger(constants.DeployerDefaults.LOGGER_NAME)
+
+
+class _HashingStreamWrapper:
+  """File-like wrapper that computes a running SHA-256 digest over bytes read."""
+
+  def __init__(self, stream: Any) -> None:
+    self._stream = stream
+    self._sha256 = hashlib.sha256()
+
+  def read(self, size: int = -1) -> bytes:
+    chunk = self._stream.read(size)
+    if chunk:
+      self._sha256.update(chunk)
+    return chunk
+
+  def drain(self, chunk_size: int = 1024 * 1024) -> str:
+    """Reads any remaining bytes in the stream and returns the hex digest."""
+    while True:
+      chunk = self.read(chunk_size)
+      if not chunk:
+        break
+    return self._sha256.hexdigest()
 
 
 class VMDeployer:
@@ -49,6 +84,8 @@ class VMDeployer:
       ssl_thumbprint: Optional[str],
       port_group_name: str,
       vcf_vm_name: str,
+      expected_ova_sha256: Optional[str] = None,
+      require_signature: bool = False,
   ) -> Any:
     """Executes Phase 2c OVA deployment onto ESXi vSAN storage inventory.
 
@@ -56,9 +93,10 @@ class VMDeployer:
             root VM folder ('ha-folder-vm'), target port group, and datastore.
     Step B: Idempotency Check - Queries viewManager for existing VirtualMachine
             matching vcf_vm_name. If present, logs notice and returns reference.
-    Step C: Streaming OVF Descriptor Parsing - Connects via HTTP stream to
-            extract OVA archive headers on-the-fly, reading the .ovf XML
-            descriptor in memory without downloading .vmdk image files locally.
+    Step C: Streaming OVF Descriptor Parsing & Integrity Verification - Connects
+            via HTTP stream to extract OVA archive headers (.ovf, .mf, .cert),
+            verifies the manifest digest and X.509 cryptographic signature, and
+            optionally verifies the full OVA SHA-256 digest.
     Step D: Direct URL NFC Lease Pull - Invokes HttpNfcLeasePullFromUrls_Task
             instructing ESXi to pull .vmdk blocks directly from remote server.
 
@@ -67,12 +105,17 @@ class VMDeployer:
         ssl_thumbprint: Captured SHA-256 SSL thumbprint of remote GCS depot.
         port_group_name: Standardized virtual port group label ("vlan-<ID>").
         vcf_vm_name: Deduplicated virtual machine appliance label.
+        expected_ova_sha256: Optional expected 64-char hex SHA-256 digest of the
+          entire OVA file.
+        require_signature: If True, fails if .mf or .cert is absent from the
+          OVA archive.
 
     Returns:
         Managed object reference to the deployed or existing VirtualMachine.
 
     Raises:
-        models.DeployerError: On lease pull error, missing storage, or OVF fail.
+        models.DeployerError: On lease pull error, missing storage, OVF fail,
+          or OVA hash/signature verification failure.
     """
     logger.info(
         "Phase 2c: Starting deployment of VM '%s' from %s...",
@@ -96,9 +139,17 @@ class VMDeployer:
       )
       return existing_vm
 
-    # Step C: Streaming OVF Descriptor Parsing
-    logger.info("Streaming OVA HTTP headers to extract .ovf XML descriptor...")
-    ovf_xml = self._fetch_and_parse_ovf_descriptor(vcf_installer_ova_url)
+    # Step C: Streaming OVF Descriptor Parsing & Integrity Verification
+    logger.info(
+        "Streaming OVA HTTP headers to extract and verify .ovf XML"
+        " descriptor..."
+    )
+    ovf_xml = self._fetch_and_parse_ovf_descriptor(
+        vcf_installer_ova_url,
+        expected_ova_sha256=expected_ova_sha256,
+        require_signature=require_signature,
+        ssl_thumbprint=ssl_thumbprint,
+    )
 
     # Step D: Direct URL NFC Lease Pull
     logger.info("Initiating direct URL NFC lease pull to remote storage...")
@@ -173,15 +224,533 @@ class VMDeployer:
     finally:
       container.Destroy()
 
-  def _fetch_and_parse_ovf_descriptor(self, ova_url: str) -> str:
-    """Opens streaming HTTP connection to parse TAR headers and extract OVF XML."""
+  _cached_system_ca_certs: Optional[List[x509.Certificate]] = None
+
+  @staticmethod
+  def _compute_bytes_digests(payload: bytes) -> Dict[str, str]:
+    """Computes SHA1, SHA256, SHA384, and SHA512 hex digests for a byte buffer."""
+    return {
+        "SHA1": hashlib.sha1(payload).hexdigest().lower(),
+        "SHA256": hashlib.sha256(payload).hexdigest().lower(),
+        "SHA384": hashlib.sha384(payload).hexdigest().lower(),
+        "SHA512": hashlib.sha512(payload).hexdigest().lower(),
+    }
+
+  @staticmethod
+  def _compute_stream_digests(
+      file_obj: Any,
+      chunk_size: int = 1024 * 1024,
+      algorithms: Optional[Tuple[str, ...]] = None,
+  ) -> Dict[str, str]:
+    """Computes hex digests over a stream for the requested hash algorithms."""
+    algo_factories = {
+        "SHA1": hashlib.sha1,
+        "SHA256": hashlib.sha256,
+        "SHA384": hashlib.sha384,
+        "SHA512": hashlib.sha512,
+    }
+    selected_algos = (
+        tuple(a.upper() for a in algorithms if a.upper() in algo_factories)
+        if algorithms
+        else tuple(algo_factories.keys())
+    )
+    hashers = {alg: algo_factories[alg]() for alg in selected_algos}
+    while True:
+      chunk = file_obj.read(chunk_size)
+      if not chunk:
+        break
+      for h in hashers.values():
+        h.update(chunk)
+    return {alg: h.hexdigest().lower() for alg, h in hashers.items()}
+
+  @staticmethod
+  def _parse_ova_manifest_entries(mf_text: str) -> Dict[str, Tuple[str, str]]:
+    """Parses OVA .mf manifest entries into basename -> (algorithm, hex_digest)."""
+    manifest_entries: Dict[str, Tuple[str, str]] = {}
+    for raw_line in mf_text.splitlines():
+      line = raw_line.strip()
+      if not line:
+        continue
+      match = re.match(
+          constants.ValidationRules.OVA_MANIFEST_ENTRY_PATTERN,
+          line,
+          flags=re.IGNORECASE,
+      )
+      if not match:
+        raise models.NonRetryableError(
+            f"Malformed manifest entry in OVA .mf file: '{line}'"
+        )
+      algo = match.group(1).upper()
+      fname = os.path.basename(match.group(2).strip())
+      expected_digest = match.group(3).strip().lower()
+      manifest_entries[fname] = (algo, expected_digest)
+    return manifest_entries
+
+  def _verify_ova_manifest(
+      self,
+      mf_text: str,
+      ovf_name: str,
+      member_hashes: Dict[str, Dict[str, str]],
+  ) -> None:
+    """Verifies OVA member digests against the .mf manifest file.
+
+    Args:
+        mf_text: Decoded text contents of the .mf manifest file.
+        ovf_name: Basename of the extracted .ovf descriptor file.
+        member_hashes: Mapping of member basenames to algorithm->hexdigest maps.
+
+    Raises:
+        models.NonRetryableError: If the manifest is empty, malformed, missing
+          the .ovf entry, missing any listed archive member, contains unlisted
+          archive members, or any computed member digest does not match.
+    """
+    manifest_entries = self._parse_ova_manifest_entries(mf_text)
+
+    if not manifest_entries:
+      raise models.NonRetryableError(
+          "OVA manifest (.mf) file contains no digest entries."
+      )
+
+    if ovf_name not in manifest_entries:
+      raise models.NonRetryableError(
+          f"OVF descriptor '{ovf_name}' is missing from OVA manifest (.mf)."
+      )
+
+    for fname, (algo, expected_hex) in manifest_entries.items():
+      if fname not in member_hashes:
+        raise models.NonRetryableError(
+            f"OVA archive is missing file '{fname}' listed in manifest (.mf)."
+        )
+      actual_hex = member_hashes[fname].get(algo, "").lower()
+      if actual_hex != expected_hex:
+        raise models.NonRetryableError(
+            f"OVA manifest (.mf) {algo} hash mismatch for '{fname}':"
+            f" expected {expected_hex}, got {actual_hex}."
+        )
+
+    for fname in member_hashes:
+      if fname not in manifest_entries:
+        raise models.NonRetryableError(
+            f"OVA archive contains file '{fname}' not listed in manifest (.mf)."
+        )
+
+  @classmethod
+  def _load_trusted_ca_certs(
+      cls, trusted_ca_pem: Optional[str] = None
+  ) -> List[x509.Certificate]:
+    """Loads trusted Root CA certificates from PEM string, env var, or system store."""
+    if trusted_ca_pem is not None:
+      pem_blocks = re.findall(
+          constants.ValidationRules.PEM_CERTIFICATE_PATTERN,
+          trusted_ca_pem,
+          flags=re.DOTALL,
+      )
+      return [
+          x509.load_pem_x509_certificate(b.encode("utf-8")) for b in pem_blocks
+      ]
+
+    env_ca_path = os.environ.get(
+        constants.ValidationRules.OVA_SIGNING_CA_BUNDLE_ENV_VAR
+    )
+    if env_ca_path and os.path.isfile(env_ca_path):
+      with open(env_ca_path, "r", encoding="utf-8", errors="replace") as f:
+        pem_text = f.read()
+      pem_blocks = re.findall(
+          constants.ValidationRules.PEM_CERTIFICATE_PATTERN,
+          pem_text,
+          flags=re.DOTALL,
+      )
+      return [
+          x509.load_pem_x509_certificate(b.encode("utf-8")) for b in pem_blocks
+      ]
+
+    if cls._cached_system_ca_certs is not None:
+      return cls._cached_system_ca_certs
+
+    ca_file = os.environ.get("SSL_CERT_FILE") or getattr(
+        ssl.get_default_verify_paths(), "cafile", None
+    )
+    loaded: List[x509.Certificate] = []
+    if ca_file and os.path.isfile(ca_file):
+      with open(ca_file, "r", encoding="utf-8", errors="replace") as f:
+        pem_text = f.read()
+      for block in re.findall(
+          constants.ValidationRules.PEM_CERTIFICATE_PATTERN,
+          pem_text,
+          flags=re.DOTALL,
+      ):
+        try:
+          loaded.append(x509.load_pem_x509_certificate(block.encode("utf-8")))
+        except Exception:  # pylint: disable=broad-exception-caught
+          continue
+    cls._cached_system_ca_certs = loaded
+    return loaded
+
+  @staticmethod
+  def _validate_cert_validity_window(
+      cert: x509.Certificate, now: datetime.datetime
+  ) -> None:
+    """Verifies that an X.509 certificate's validity window includes 'now'."""
+    not_before = getattr(cert, "not_valid_before_utc", None)
+    if not_before is None:
+      not_before = cert.not_valid_before.replace(tzinfo=datetime.timezone.utc)
+    not_after = getattr(cert, "not_valid_after_utc", None)
+    if not_after is None:
+      not_after = cert.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+
+    if now < not_before or now > not_after:
+      raise models.NonRetryableError(
+          "OVA signing certificate in .cert is expired or not yet valid"
+          f" (valid from {not_before.isoformat()} to {not_after.isoformat()})."
+      )
+
+  @classmethod
+  def _verify_x509_chain(
+      cls,
+      cert_chain: List[x509.Certificate],
+      trusted_roots: List[x509.Certificate],
+      now: datetime.datetime,
+  ) -> None:
+    """Verifies the X.509 issuer chain from leaf certificate up to a trusted Root CA."""
+    if not trusted_roots:
+      raise models.NonRetryableError(
+          "No trusted Root CA certificates available to verify OVA .cert chain."
+      )
+
+    roots_by_subject: Dict[x509.Name, List[x509.Certificate]] = {}
+    for root in trusted_roots:
+      roots_by_subject.setdefault(root.subject, []).append(root)
+
+    intermediates = cert_chain[1:]
+    current = cert_chain[0]
+    visited = {current}
+    intermediate_count = 0
+
+    for _ in range(len(cert_chain) + 1):
+      for root_ca in roots_by_subject.get(current.issuer, []):
+        try:
+          cls._validate_cert_validity_window(root_ca, now)
+          bc_ext = root_ca.extensions.get_extension_for_class(
+              x509.BasicConstraints
+          )
+          if not bc_ext.value.ca:
+            continue
+          if (
+              bc_ext.value.path_length is not None
+              and intermediate_count > bc_ext.value.path_length
+          ):
+            continue
+          try:
+            ku_ext = root_ca.extensions.get_extension_for_class(x509.KeyUsage)
+            if not ku_ext.value.key_cert_sign:
+              continue
+          except x509.ExtensionNotFound:
+            pass
+          current.verify_directly_issued_by(root_ca)
+          return
+        except Exception:  # pylint: disable=broad-exception-caught
+          continue
+
+      next_issuer: Optional[x509.Certificate] = None
+      for candidate in intermediates:
+        if candidate in visited or candidate.subject != current.issuer:
+          continue
+        try:
+          cls._validate_cert_validity_window(candidate, now)
+          bc_ext = candidate.extensions.get_extension_for_class(
+              x509.BasicConstraints
+          )
+          if not bc_ext.value.ca:
+            continue
+          if (
+              bc_ext.value.path_length is not None
+              and intermediate_count > bc_ext.value.path_length
+          ):
+            continue
+          try:
+            ku_ext = candidate.extensions.get_extension_for_class(x509.KeyUsage)
+            if not ku_ext.value.key_cert_sign:
+              continue
+          except x509.ExtensionNotFound:
+            pass
+          current.verify_directly_issued_by(candidate)
+          next_issuer = candidate
+          break
+        except Exception:  # pylint: disable=broad-exception-caught
+          continue
+
+      if next_issuer is None:
+        break
+      visited.add(next_issuer)
+      current = next_issuer
+      intermediate_count += 1
+
+    raise models.NonRetryableError(
+        "OVA signing certificate chain is untrusted: unable to verify issuer"
+        " chain against trusted Root CAs."
+    )
+
+  def _verify_ova_certificate(
+      self,
+      cert_text: str,
+      mf_name: str,
+      mf_bytes: bytes,
+      trusted_ca_pem: Optional[str] = None,
+  ) -> None:
+    """Verifies the X.509 certificate chain, key usage, and cryptographic signature in .cert over .mf.
+
+    Args:
+        cert_text: Decoded text contents of the .cert signature file.
+        mf_name: Basename of the .mf manifest file.
+        mf_bytes: Raw bytes of the .mf manifest file as signed in the archive.
+        trusted_ca_pem: Optional PEM bundle of trusted Root CAs (overrides
+          default CA store when provided).
+
+    Raises:
+        models.NonRetryableError: If the certificate is missing, malformed,
+          expired, untrusted, missing codeSigning EKU, or signature verification
+          over .mf fails.
+    """
+    sig_algo: Optional[str] = None
+    signed_target: Optional[str] = None
+    sig_hex: Optional[str] = None
+
+    for raw_line in cert_text.splitlines():
+      line = raw_line.strip()
+      if not line:
+        continue
+      if line.startswith("-----BEGIN"):
+        break
+      match = re.match(
+          constants.ValidationRules.OVA_MANIFEST_ENTRY_PATTERN,
+          line,
+          flags=re.IGNORECASE,
+      )
+      if match:
+        sig_algo = match.group(1).upper()
+        signed_target = os.path.basename(match.group(2).strip())
+        sig_hex = match.group(3).strip()
+        break
+
+    if not sig_algo or not signed_target or not sig_hex:
+      raise models.NonRetryableError(
+          "Missing or malformed signature header in OVA .cert file."
+      )
+
+    if mf_name and signed_target != os.path.basename(mf_name):
+      raise models.NonRetryableError(
+          f"OVA .cert signature targets '{signed_target}', expected manifest"
+          f" '{os.path.basename(mf_name)}'."
+      )
+
     try:
+      signature_bytes = bytes.fromhex(sig_hex)
+    except ValueError as exc:
+      raise models.NonRetryableError(
+          f"Invalid hexadecimal signature in OVA .cert file: {exc}"
+      ) from exc
+
+    hash_alg_map = {
+        "SHA256": hashes.SHA256(),
+        "SHA384": hashes.SHA384(),
+        "SHA512": hashes.SHA512(),
+    }
+    hash_alg = hash_alg_map.get(sig_algo)
+    if not hash_alg:
+      raise models.NonRetryableError(
+          "Unsupported or weak signature digest algorithm in OVA .cert:"
+          f" '{sig_algo}'"
+      )
+
+    pem_blocks = re.findall(
+        constants.ValidationRules.PEM_CERTIFICATE_PATTERN,
+        cert_text,
+        flags=re.DOTALL,
+    )
+    if not pem_blocks:
+      raise models.NonRetryableError(
+          "No PEM-encoded X.509 certificate found in OVA .cert file."
+      )
+
+    try:
+      cert_chain = [
+          x509.load_pem_x509_certificate(block.encode("utf-8"))
+          for block in pem_blocks
+      ]
+    except Exception as exc:
+      raise models.NonRetryableError(
+          f"Failed to parse X.509 certificate in OVA .cert file: {exc}"
+      ) from exc
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for cert_item in cert_chain:
+      self._validate_cert_validity_window(cert_item, now)
+
+    leaf_cert = cert_chain[0]
+    try:
+      bc_ext = leaf_cert.extensions.get_extension_for_class(
+          x509.BasicConstraints
+      )
+      if bc_ext.value.ca:
+        raise models.NonRetryableError(
+            "OVA leaf signing certificate must not be a CA certificate."
+        )
+    except x509.ExtensionNotFound:
+      pass
+
+    try:
+      ku_ext = leaf_cert.extensions.get_extension_for_class(x509.KeyUsage)
+      if not ku_ext.value.digital_signature:
+        raise models.NonRetryableError(
+            "OVA signing certificate KeyUsage does not permit digitalSignature."
+        )
+    except x509.ExtensionNotFound:
+      pass
+
+    try:
+      eku_ext = leaf_cert.extensions.get_extension_for_class(
+          x509.ExtendedKeyUsage
+      )
+      if ExtendedKeyUsageOID.CODE_SIGNING not in eku_ext.value:
+        raise models.NonRetryableError(
+            "OVA signing certificate ExtendedKeyUsage does not permit"
+            " codeSigning."
+        )
+    except x509.ExtensionNotFound as exc:
+      raise models.NonRetryableError(
+          "OVA signing certificate is missing required ExtendedKeyUsage"
+          " (codeSigning) extension."
+      ) from exc
+
+    trusted_roots = self._load_trusted_ca_certs(trusted_ca_pem)
+    self._verify_x509_chain(cert_chain, trusted_roots, now)
+
+    pub_key = leaf_cert.public_key()
+    try:
+      if isinstance(pub_key, rsa.RSAPublicKey):
+        pub_key.verify(
+            signature_bytes, mf_bytes, padding.PKCS1v15(), hash_alg
+        )
+      elif isinstance(pub_key, ec.EllipticCurvePublicKey):
+        pub_key.verify(signature_bytes, mf_bytes, ec.ECDSA(hash_alg))
+      else:
+        raise models.NonRetryableError(
+            "Unsupported public key algorithm in OVA .cert:"
+            f" {type(pub_key).__name__}"
+        )
+    except models.NonRetryableError:
+      raise
+    except Exception as exc:
+      raise models.NonRetryableError(
+          "OVA cryptographic signature verification failed for manifest"
+          f" '{mf_name}': {exc}"
+      ) from exc
+
+  def _verify_ova_integrity(
+      self,
+      ova_url: str,
+      ovf_name: str,
+      member_hashes: Dict[str, Dict[str, str]],
+      mf_name: Optional[str],
+      mf_bytes: Optional[bytes],
+      cert_name: Optional[str],
+      cert_bytes: Optional[bytes],
+      require_signature: bool = False,
+      verified_whole_ova_sha256: bool = False,
+      allow_unverified_ova: bool = False,
+      trusted_ca_pem: Optional[str] = None,
+  ) -> None:
+    """Orchestrates .mf manifest and .cert signature verification for an OVA."""
+    if require_signature and (mf_bytes is None or cert_bytes is None):
+      raise models.NonRetryableError(
+          f"OVA signature verification required for '{ova_url}', but .mf"
+          " manifest or .cert certificate is missing in archive."
+      )
+
+    if cert_bytes is not None and mf_bytes is None:
+      raise models.NonRetryableError(
+          f"OVA archive at '{ova_url}' contains a .cert file ('{cert_name}')"
+          " without a corresponding .mf manifest."
+      )
+
+    if mf_bytes is not None:
+      self._verify_ova_manifest(
+          mf_text=mf_bytes.decode("utf-8", errors="replace"),
+          ovf_name=ovf_name,
+          member_hashes=member_hashes,
+      )
+      logger.info(
+          "Successfully verified OVA manifest (.mf) integrity for '%s'.",
+          mf_name,
+      )
+
+    verified_cert_signature = False
+    if cert_bytes is not None and mf_bytes is not None:
+      self._verify_ova_certificate(
+          cert_text=cert_bytes.decode("utf-8", errors="replace"),
+          mf_name=mf_name or "",
+          mf_bytes=mf_bytes,
+          trusted_ca_pem=trusted_ca_pem,
+      )
+      verified_cert_signature = True
+      logger.info(
+          "Successfully verified OVA X.509 certificate and signature (.cert)"
+          " for '%s'.",
+          cert_name,
+      )
+
+    if not verified_whole_ova_sha256 and not verified_cert_signature:
+      if not allow_unverified_ova:
+        raise models.NonRetryableError(
+            f"OVA integrity/authenticity verification failed for '{ova_url}':"
+            " neither a verified depot SHA-256 digest nor a trusted X.509"
+            " .cert signature is present."
+        )
+      logger.warning(
+          "Proceeding with unverified OVA archive at '%s' because"
+          " allow_unverified_ova=True.",
+          ova_url,
+      )
+
+  def _fetch_and_parse_ovf_descriptor(
+      self,
+      ova_url: str,
+      expected_ova_sha256: Optional[str] = None,
+      require_signature: bool = False,
+      ssl_thumbprint: Optional[str] = None,
+      allow_unverified_ova: bool = False,
+      trusted_ca_pem: Optional[str] = None,
+  ) -> str:
+    """Opens streaming HTTP connection to parse TAR headers, verify OVA integrity, and extract OVF XML."""
+    clean_expected_sha256: Optional[str] = None
+    if expected_ova_sha256 is not None:
+      clean_expected_sha256 = expected_ova_sha256.strip().lower()
+      if not re.match(
+          constants.ValidationRules.SHA256_HEX_PATTERN, clean_expected_sha256
+      ):
+        raise models.ValidationError(
+            "Invalid expected_ova_sha256"
+            f" '{expected_ova_sha256}': must be a valid 64-character"
+            " hexadecimal SHA-256 digest."
+        )
+
+    ovf_xml: Optional[str] = None
+    ovf_name: Optional[str] = None
+    mf_bytes: Optional[bytes] = None
+    mf_name: Optional[str] = None
+    cert_bytes: Optional[bytes] = None
+    cert_name: Optional[str] = None
+    member_hashes: Dict[str, Dict[str, str]] = {}
+    parsed_mf_entries: Optional[Dict[str, Tuple[str, str]]] = None
+    verified_whole_ova_sha256 = False
+
+    try:
+      parsed = urllib.parse.urlparse(ova_url)
       headers = {"User-Agent": constants.VMDeployerDefaults.HTTP_USER_AGENT}
       req = urllib.request.Request(ova_url, headers=headers)
-      ssl_ctx = (
-          ssl._create_unverified_context()
-          if hasattr(ssl, "_create_unverified_context")
-          else None
+      ssl_ctx = network_utils.create_depot_ssl_context(
+          fqdn_host=parsed.hostname,
+          expected_thumbprint=ssl_thumbprint,
       )
       with urllib.request.urlopen(
           req,
@@ -193,12 +762,69 @@ class VMDeployer:
               f"HTTP fetch failed for OVF descriptor from '{ova_url}': status"
               f" {resp.status}"
           )
-        with tarfile.open(fileobj=resp, mode="r|*") as tar:
+        stream: Any = (
+            _HashingStreamWrapper(resp) if clean_expected_sha256 else resp
+        )
+        with tarfile.open(fileobj=stream, mode="r|*") as tar:
           for member in tar:
-            if member.isfile() and member.name.endswith(".ovf"):
+            if not member.isfile():
+              continue
+            member_basename = os.path.basename(member.name)
+            lower_name = member_basename.lower()
+
+            if lower_name.endswith(".ovf"):
               ovf_file = tar.extractfile(member)
               if ovf_file:
-                return ovf_file.read().decode("utf-8", errors="replace")
+                ovf_bytes = ovf_file.read()
+                ovf_name = member_basename
+                member_hashes[member_basename] = self._compute_bytes_digests(
+                    ovf_bytes
+                )
+                ovf_xml = ovf_bytes.decode("utf-8", errors="replace")
+            elif lower_name.endswith(".mf"):
+              mf_file = tar.extractfile(member)
+              if mf_file:
+                mf_bytes = mf_file.read()
+                mf_name = member_basename
+                parsed_mf_entries = self._parse_ova_manifest_entries(
+                    mf_bytes.decode("utf-8", errors="replace")
+                )
+            elif lower_name.endswith(".cert"):
+              cert_file = tar.extractfile(member)
+              if cert_file:
+                cert_bytes = cert_file.read()
+                cert_name = member_basename
+            else:
+              if (
+                  not allow_unverified_ova
+                  or clean_expected_sha256
+                  or mf_bytes is not None
+                  or require_signature
+              ):
+                other_file = tar.extractfile(member)
+                if other_file:
+                  req_algos: Optional[Tuple[str, ...]] = None
+                  if parsed_mf_entries and member_basename in parsed_mf_entries:
+                    req_algos = (parsed_mf_entries[member_basename][0],)
+                  member_hashes[member_basename] = self._compute_stream_digests(
+                      other_file, algorithms=req_algos
+                  )
+              elif ovf_xml is not None and lower_name.endswith(".vmdk"):
+                break
+
+        if clean_expected_sha256 and isinstance(stream, _HashingStreamWrapper):
+          actual_sha256 = stream.drain().lower()
+          if actual_sha256 != clean_expected_sha256:
+            raise models.NonRetryableError(
+                f"OVA SHA-256 integrity check failed for '{ova_url}': expected"
+                f" {clean_expected_sha256}, got {actual_sha256}."
+            )
+          verified_whole_ova_sha256 = True
+          logger.info(
+              "Verified whole-OVA SHA-256 digest for '%s': %s",
+              ova_url,
+              actual_sha256,
+          )
     except Exception as exc:  # pylint: disable=broad-exception-caught
       if isinstance(exc, (models.ValidationError, models.NonRetryableError)):
         raise exc
@@ -206,9 +832,25 @@ class VMDeployer:
           f"Failed to stream and parse .ovf descriptor from '{ova_url}': {exc}"
       ) from exc
 
-    raise models.NonRetryableError(
-        f"No .ovf descriptor file located in OVA archive at '{ova_url}'."
+    if ovf_xml is None or ovf_name is None:
+      raise models.NonRetryableError(
+          f"No .ovf descriptor file located in OVA archive at '{ova_url}'."
+      )
+
+    self._verify_ova_integrity(
+        ova_url=ova_url,
+        ovf_name=ovf_name,
+        member_hashes=member_hashes,
+        mf_name=mf_name,
+        mf_bytes=mf_bytes,
+        cert_name=cert_name,
+        cert_bytes=cert_bytes,
+        require_signature=require_signature,
+        verified_whole_ova_sha256=verified_whole_ova_sha256,
+        allow_unverified_ova=allow_unverified_ova,
+        trusted_ca_pem=trusted_ca_pem,
     )
+    return ovf_xml
 
   def _execute_lease_pull(
       self,
