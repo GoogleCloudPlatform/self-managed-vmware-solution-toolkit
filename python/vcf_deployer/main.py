@@ -363,12 +363,17 @@ def run_pipeline(
         # Phase 2c-e: VCF OVA Deployment & Bootstrapping via VMDeployer
         vm_mgr = vm_deployer.VMDeployer(esxi=esxi_cli)
         if ctx.vcf_installer_ova_url and effective_pg and ctx.vcf_vm_name:
+          deploy_kwargs: Dict[str, Any] = {
+              "vcf_installer_ova_url": ctx.vcf_installer_ova_url,
+              "ssl_thumbprint": ctx.ssl_thumbprint,
+              "port_group_name": effective_pg,
+              "vcf_vm_name": ctx.vcf_vm_name,
+          }
+          if ctx.vcf_installer_ova_sha256:
+            deploy_kwargs["expected_ova_sha256"] = ctx.vcf_installer_ova_sha256
           vm_ref = retry_with_backoff(
               vm_mgr.deploy_ova,
-              vcf_installer_ova_url=ctx.vcf_installer_ova_url,
-              ssl_thumbprint=ctx.ssl_thumbprint,
-              port_group_name=effective_pg,
-              vcf_vm_name=ctx.vcf_vm_name,
+              **deploy_kwargs,
           )
 
           # Phase 2d: OVF Environment Config (vCenter-less extraConfig)

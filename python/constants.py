@@ -165,14 +165,28 @@ class ValidationRules:
   VCF_OVA_PREFIX_TEMPLATE = "VCF-SDDC-Manager-Appliance-{vcf_version}"
   HTML_OVA_HREF_PATTERN = r'href="([^"]+\.ova)"'
   HTML_OVA_HREF_FALLBACK_PATTERN = r'href=["\']?([^">\s]+\.ova)["\']?'
+  SHA256_HEX_PATTERN = r"^[0-9a-fA-F]{64}$"
+  OVA_MANIFEST_ENTRY_PATTERN = (
+      r"^(SHA1|SHA256|SHA384|SHA512)\s*\(\s*([^)]+?)\s*\)\s*=\s*([0-9a-fA-F]+)\s*$"
+  )
+  PEM_CERTIFICATE_PATTERN = (
+      r"(-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----)"
+  )
 
   DEPOT_HOST_TEMPLATE = "offline-depot.{region}.selfmanagedvmwareengine.goog"
+  PROD_DEPOT_DOMAIN_SUFFIX = ".selfmanagedvmwareengine.goog"
+  OFFLINE_DEPOT_CA_BUNDLE_ENV_VAR = "OFFLINE_DEPOT_CA_BUNDLE"
+  OVA_SIGNING_CA_BUNDLE_ENV_VAR = "VCF_OVA_TRUSTED_CA_BUNDLE"
   DEPOT_HOST_TEMPLATES: Dict[str, str] = {
       "prod": "offline-depot.{region}.selfmanagedvmwareengine.goog",
       "staging": "offline-depot.{region}.staging.smve-vcf.internal",
       "autopush": "offline-depot.{region}.autopush.smve-vcf.internal",
   }
   DEPOT_INDEX_PATH = "/PROD/COMP/SDDC_MANAGER_VCF/"
+  DEPOT_CATALOG_PATH = (
+      "/PROD/metadata/productVersionCatalog/v1/productVersionCatalog.json"
+  )
+  DEPOT_MANIFEST_PATH = "/PROD/metadata/manifest/v1/vcfManifest.json"
   DEPOT_INDEX_TIMEOUT_SECONDS = 30
 
   # Password complexity parameters (min_length, max_length, min_classes)

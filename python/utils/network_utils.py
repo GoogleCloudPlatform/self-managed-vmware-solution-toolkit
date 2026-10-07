@@ -8,9 +8,10 @@ validation, and remote SSL SHA-256 certificate fingerprint capture.
 import hashlib
 import ipaddress
 import logging
+import os
 import socket
 import ssl
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 import constants
 import models
@@ -159,6 +160,111 @@ def capture_ssl_thumbprint(target_url: str) -> str:
     ) from exc
 
 
+class _HostOverrideSSLContext(ssl.SSLContext):
+  """SSLContext subclass supporting SNI/hostname override and SHA-256 thumbprint pinning."""
+
+  _override_server_hostname: Optional[str] = None
+  _expected_thumbprint_hex: Optional[str] = None
+
+  def wrap_socket(
+      self,
+      sock: socket.socket,
+      server_side: bool = False,
+      do_handshake_on_connect: bool = True,
+      suppress_ragged_eofs: bool = True,
+      server_hostname: Optional[str] = None,
+      session: Optional[ssl.SSLSession] = None,
+  ) -> ssl.SSLSocket:
+    effective_hostname = self._override_server_hostname or server_hostname
+    ssock = super().wrap_socket(
+        sock,
+        server_side=server_side,
+        do_handshake_on_connect=do_handshake_on_connect,
+        suppress_ragged_eofs=suppress_ragged_eofs,
+        server_hostname=effective_hostname,
+        session=session,
+    )
+    if self._expected_thumbprint_hex and do_handshake_on_connect:
+      cert_der = ssock.getpeercert(binary_form=True)
+      actual_hex = (
+          hashlib.sha256(cert_der).hexdigest().upper() if cert_der else ""
+      )
+      if actual_hex != self._expected_thumbprint_hex:
+        ssock.close()
+        raise ssl.SSLCertVerificationError(
+            "Offline depot SSL certificate SHA-256 thumbprint mismatch:"
+            f" expected {self._expected_thumbprint_hex}, got {actual_hex}."
+        )
+    return ssock
+
+
+def create_depot_ssl_context(
+    fqdn_host: Optional[str] = None,
+    expected_thumbprint: Optional[str] = None,
+    ca_bundle_path: Optional[str] = None,
+) -> ssl.SSLContext:
+  """Builds an SSLContext for Offline Depot HTTPS connections over PSC or DNS.
+
+  Verifies the X.509 certificate chain and hostname when connecting to a
+  production Offline Depot domain (*.selfmanagedvmwareengine.goog, backed by
+  Google Trust Services) or when a custom CA bundle is configured via
+  ca_bundle_path / OFFLINE_DEPOT_CA_BUNDLE. When connecting via a PSC IP with
+  a Host header (fqdn_host), overrides SNI/hostname verification to fqdn_host.
+  Also enforces SHA-256 certificate thumbprint pinning when expected_thumbprint
+  is provided.
+
+  Args:
+      fqdn_host: Optional logical FQDN or hostname of the Offline Depot server.
+      expected_thumbprint: Optional colon-separated or raw hex SHA-256 SSL
+        certificate thumbprint to pin.
+      ca_bundle_path: Optional path to a custom trusted CA PEM bundle.
+
+  Returns:
+      Configured ssl.SSLContext instance.
+  """
+  clean_fqdn = fqdn_host.strip().rstrip(".") if fqdn_host else None
+  is_ip_host = False
+  if clean_fqdn:
+    try:
+      ipaddress.ip_address(clean_fqdn)
+      is_ip_host = True
+    except ValueError:
+      is_ip_host = False
+
+  effective_ca_bundle = ca_bundle_path or os.environ.get(
+      constants.ValidationRules.OFFLINE_DEPOT_CA_BUNDLE_ENV_VAR
+  )
+  should_verify_ca = bool(effective_ca_bundle) or bool(
+      clean_fqdn
+      and not is_ip_host
+      and clean_fqdn.lower().endswith(
+          constants.ValidationRules.PROD_DEPOT_DOMAIN_SUFFIX
+      )
+  )
+
+  ctx = _HostOverrideSSLContext(ssl.PROTOCOL_TLS_CLIENT)
+  if clean_fqdn and not is_ip_host:
+    ctx._override_server_hostname = clean_fqdn
+
+  if expected_thumbprint:
+    clean_tp = expected_thumbprint.replace(":", "").strip().upper()
+    if clean_tp:
+      ctx._expected_thumbprint_hex = clean_tp
+
+  if should_verify_ca:
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    ctx.check_hostname = bool(clean_fqdn and not is_ip_host)
+    if effective_ca_bundle:
+      ctx.load_verify_locations(cafile=effective_ca_bundle)
+    else:
+      ctx.load_default_certs()
+  else:
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+  return ctx
+
+
 def validate_subnet_cidr_size(cidr: str) -> None:
   """Validates CIDR format and enforces minimum standard GCP subnet size of /29 (4 usable IPs).
 
@@ -237,5 +343,6 @@ def validate_subnet_cidr_not_in_use(
             f" or is already used by existing subnet '{sub_uri}'"
             f" with CIDR '{subnet_info.cidr}'!"
         )
+
 
 

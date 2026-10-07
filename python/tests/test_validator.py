@@ -393,12 +393,13 @@ class TestPreDeploymentValidator(unittest.TestCase):
         str(ctx.exception),
     )
 
+  @mock.patch.object(validator.PreDeploymentValidator, "_fetch_ova_sha256_from_depot", return_value="ab" * 32)
   @mock.patch("vcf_deployer.offline_depot_infra.OfflineDepotInfraManager")
   @mock.patch("utils.network_utils.capture_ssl_thumbprint")
   @mock.patch("utils.network_utils.extract_vlan_cidr_and_routing")
   @mock.patch.object(validator.PreDeploymentValidator, "_derive_vcf_ova_url")
   def test_validate_and_extract_full_vcf_flow(
-      self, mock_derive_url, mock_extract_vlan, mock_capture_thumbprint, mock_infra_mgr_cls
+      self, mock_derive_url, mock_extract_vlan, mock_capture_thumbprint, mock_infra_mgr_cls, mock_fetch_sha
   ):
     """Verifies full Phase 1 validation and ValidationContext generation for VCF deployment."""
     self.mock_config.gce_nodes = ["esxi-1"]
@@ -622,6 +623,7 @@ class TestPreDeploymentValidator(unittest.TestCase):
         "offline-depot.us-central1.selfmanagedvmwareengine.goog",
     )
 
+  @mock.patch.object(validator.PreDeploymentValidator, "_fetch_ova_sha256_from_depot", return_value=None)
   @mock.patch("vcf_deployer.validator.offline_depot_infra.OfflineDepotInfraManager")
   @mock.patch.object(validator.PreDeploymentValidator, "_derive_vcf_ova_url")
   @mock.patch("utils.network_utils.capture_ssl_thumbprint")
@@ -632,6 +634,7 @@ class TestPreDeploymentValidator(unittest.TestCase):
       mock_capture_thumbprint,
       mock_derive_url,
       mock_infra_mgr_cls,
+      mock_fetch_sha,
   ):
     """Verifies validate_and_extract populates ctx.dns_server when supplied."""
     self.mock_config.gce_nodes = ["esxi-1"]
@@ -695,6 +698,7 @@ class TestPreDeploymentValidator(unittest.TestCase):
     ctx = self.validator.validate_and_extract()
     self.assertEqual(ctx.dns_server, "10.0.0.2")
 
+  @mock.patch.object(validator.PreDeploymentValidator, "_fetch_ova_sha256_from_depot", return_value=None)
   @mock.patch("vcf_deployer.validator.offline_depot_infra.OfflineDepotInfraManager")
   @mock.patch.object(validator.PreDeploymentValidator, "_derive_vcf_ova_url")
   @mock.patch("utils.network_utils.capture_ssl_thumbprint")
@@ -705,6 +709,7 @@ class TestPreDeploymentValidator(unittest.TestCase):
       mock_capture_thumbprint,
       mock_derive_url,
       mock_infra_mgr_cls,
+      mock_fetch_sha,
   ):
     """Verifies validate_and_extract passes offline_depot_subnet_cidr to OfflineDepotInfraManager."""
     self.mock_config.gce_nodes = ["esxi-1"]
@@ -902,9 +907,10 @@ class TestPreDeploymentValidator(unittest.TestCase):
     self.assertIn("projects/p/regions/z/subnetworks/mgmt-subnet", str(ctx_err.exception))
 
 
+  @mock.patch.object(validator.PreDeploymentValidator, "_fetch_ova_sha256_from_depot", return_value=None)
   @mock.patch("vcf_deployer.validator.network_utils.capture_ssl_thumbprint")
   def test_validate_and_extract_calls_ensure_drift_manager_p4sa_iam(
-      self, mock_capture_thumbprint
+      self, mock_capture_thumbprint, mock_fetch_sha
   ):
     """Verifies that validate_and_extract calls ensure_drift_manager_p4sa_iam post Step 9."""
     self.mock_config.project = "test-project-123"
@@ -1002,6 +1008,126 @@ class TestPreDeploymentValidator(unittest.TestCase):
     self.mock_gcp.ensure_drift_manager_p4sa_iam.assert_not_called()
 
 
+  @mock.patch("urllib.request.urlopen")
+  def test_fetch_ova_sha256_from_depot_catalog_json_success(self, mock_urlopen):
+    """Verifies resolving expected OVA SHA-256 from offline depot productVersionCatalog.json."""
+    expected_sha = "abcdef01" * 8
+    catalog_payload = (
+        '{"patches": {"SDDC_MANAGER_VCF": [{"artifacts": {"bundles":'
+        ' [{"binaries": [{"fileName":'
+        ' "VCF-SDDC-Manager-Appliance-5.1.1.ova", "checksum": "'
+        + expected_sha.upper()
+        + '", "checksumType": "SHA256"}]}]}}]}}'
+    )
+    mock_resp = mock.MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = catalog_payload.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_urlopen.return_value = mock_resp
+
+    sha = self.validator._fetch_ova_sha256_from_depot(
+        "https://10.0.100.2/PROD/COMP/SDDC_MANAGER_VCF/VCF-SDDC-Manager-Appliance-5.1.1.ova",
+        fqdn_host="offline-depot.us-central1.selfmanagedvmwareengine.goog",
+    )
+    self.assertEqual(sha, expected_sha)
+
+  @mock.patch("urllib.request.urlopen")
+  def test_fetch_ova_sha256_from_depot_catalog_malformed_raises_validation_error(
+      self, mock_urlopen
+  ):
+    """Verifies ValidationError when productVersionCatalog.json contains malformed SHA-256."""
+    catalog_payload = (
+        '{"binaries": [{"fileName": "vcf.ova", "checksum": "not-a-sha256",'
+        ' "checksumType": "SHA256"}]}'
+    )
+    mock_resp = mock.MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = catalog_payload.encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_urlopen.return_value = mock_resp
+
+    with self.assertRaises(models.ValidationError) as ctx:
+      self.validator._fetch_ova_sha256_from_depot("https://10.0.100.2/vcf.ova")
+    self.assertIn("Malformed SHA-256 digest in offline depot catalog", str(ctx.exception))
+
+  @mock.patch("urllib.request.urlopen")
+  def test_fetch_ova_sha256_from_depot_sidecar_success(self, mock_urlopen):
+    """Verifies fallback to sidecar .sha256 digest from offline depot."""
+    expected_sha = "abcdef01" * 8
+    mock_resp = mock.MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = (
+        f"{expected_sha}  VCF-SDDC-Manager-Appliance-5.1.1.ova\n".encode("utf-8")
+    )
+    mock_resp.__enter__.return_value = mock_resp
+    mock_urlopen.return_value = mock_resp
+
+    sha = self.validator._fetch_ova_sha256_from_depot(
+        "https://10.0.100.2/PROD/COMP/SDDC_MANAGER_VCF/VCF-SDDC-Manager-Appliance-5.1.1.ova",
+        fqdn_host="offline-depot.us-central1.selfmanagedvmwareengine.goog",
+    )
+    self.assertEqual(sha, expected_sha)
+
+  @mock.patch("urllib.request.urlopen")
+  def test_fetch_ova_sha256_from_depot_sidecar_malformed_raises_validation_error(
+      self, mock_urlopen
+  ):
+    """Verifies ValidationError when sidecar .sha256 contains malformed digest."""
+    mock_resp = mock.MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = b"invalid_digest_value"
+    mock_resp.__enter__.return_value = mock_resp
+    mock_urlopen.return_value = mock_resp
+
+    with self.assertRaises(models.ValidationError) as ctx:
+      self.validator._fetch_ova_sha256_from_depot("https://10.0.100.2/vcf.ova")
+    self.assertIn("Malformed SHA-256 digest", str(ctx.exception))
+
+  @mock.patch("urllib.request.urlopen")
+  def test_fetch_ova_sha256_from_depot_skips_untyped_non_sha256_and_falls_back(
+      self, mock_urlopen
+  ):
+    """Verifies non-SHA256 checksum without checksumType does not raise and falls back cleanly."""
+    expected_sha = "abcdef01" * 8
+    # First catalog has MD5 checksum without checksumType; second catalog has valid SHA256
+    catalog1 = '{"binaries": [{"fileName": "vcf.ova", "checksum": "d41d8cd98f00b204e9800998ecf8427e"}]}'
+    catalog2 = (
+        '{"binaries": [{"fileName": "vcf.ova", "checksum": "'
+        + expected_sha
+        + '", "checksumType": "SHA256"}]}'
+    )
+    resp1 = mock.MagicMock()
+    resp1.status = 200
+    resp1.read.return_value = catalog1.encode("utf-8")
+    resp1.__enter__.return_value = resp1
+
+    resp2 = mock.MagicMock()
+    resp2.status = 200
+    resp2.read.return_value = catalog2.encode("utf-8")
+    resp2.__enter__.return_value = resp2
+
+    mock_urlopen.side_effect = [resp1, resp2]
+
+    sha = self.validator._fetch_ova_sha256_from_depot(
+        "https://10.0.100.2/vcf.ova",
+        fqdn_host="offline-depot.us-central1.selfmanagedvmwareengine.goog",
+    )
+    self.assertEqual(sha, expected_sha)
+
+  def test_extract_ova_sha256_from_catalog_json_ignores_generic_name_key(self):
+    """Verifies generic 'name' key is not falsely matched as an OVA file entry."""
+    payload = {
+        "component": {
+            "name": "vcf.ova",
+            "checksum": "not-a-sha256",
+            "checksumType": "SHA256",
+        }
+    }
+    res = self.validator._extract_ova_sha256_from_catalog_json(
+        payload, "vcf.ova"
+    )
+    self.assertIsNone(res)
+
+
 if __name__ == "__main__":
   unittest.main()
-

@@ -1,5 +1,7 @@
 """Unit tests for utils/network_utils.py module."""
 
+import hashlib
+import ssl
 import unittest
 from unittest import mock
 
@@ -231,6 +233,68 @@ class TestNetworkUtils(unittest.TestCase):
     mock_gcp = mock.MagicMock()
     network_utils.validate_subnet_cidr_not_in_use("", [], mock_gcp)
     mock_gcp.fetch_subnetwork_cidr.assert_not_called()
+
+  def test_create_depot_ssl_context_prod_domain_enables_verification(self):
+    """Verifies CERT_REQUIRED and hostname override for prod offline depot domains."""
+    ctx = network_utils.create_depot_ssl_context(
+        fqdn_host="offline-depot.us-central1.selfmanagedvmwareengine.goog"
+    )
+    self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+    self.assertTrue(ctx.check_hostname)
+    self.assertEqual(
+        ctx._override_server_hostname,
+        "offline-depot.us-central1.selfmanagedvmwareengine.goog",
+    )
+
+  def test_create_depot_ssl_context_staging_domain_without_bundle(self):
+    """Verifies CERT_NONE when connecting to staging internal domain without custom CA bundle."""
+    ctx = network_utils.create_depot_ssl_context(
+        fqdn_host="offline-depot.us-central1.staging.smve-vcf.internal"
+    )
+    self.assertEqual(ctx.verify_mode, ssl.CERT_NONE)
+    self.assertFalse(ctx.check_hostname)
+    self.assertEqual(
+        ctx._override_server_hostname,
+        "offline-depot.us-central1.staging.smve-vcf.internal",
+    )
+
+  @mock.patch.object(ssl.SSLContext, "wrap_socket")
+  def test_create_depot_ssl_context_thumbprint_pinning_match_and_mismatch(
+      self, mock_super_wrap
+  ):
+    """Verifies SHA-256 certificate thumbprint pinning inside _HostOverrideSSLContext.wrap_socket."""
+    cert_der = b"fake-depot-der-certificate-bytes"
+    actual_sha = hashlib.sha256(cert_der).hexdigest().upper()
+    colon_thumbprint = ":".join(
+        actual_sha[i : i + 2] for i in range(0, len(actual_sha), 2)
+    )
+
+    mock_ssock = mock.MagicMock()
+    mock_ssock.getpeercert.return_value = cert_der
+    mock_super_wrap.return_value = mock_ssock
+
+    # Matching thumbprint succeeds and overrides server_hostname
+    ctx_ok = network_utils.create_depot_ssl_context(
+        fqdn_host="offline-depot.us-central1.selfmanagedvmwareengine.goog",
+        expected_thumbprint=colon_thumbprint,
+    )
+    dummy_sock = mock.MagicMock()
+    returned_ssock = ctx_ok.wrap_socket(dummy_sock, server_hostname="10.66.6.3")
+    self.assertEqual(returned_ssock, mock_ssock)
+    self.assertEqual(
+        mock_super_wrap.call_args.kwargs.get("server_hostname"),
+        "offline-depot.us-central1.selfmanagedvmwareengine.goog",
+    )
+
+    # Mismatched thumbprint closes socket and raises SSLCertVerificationError
+    ctx_bad = network_utils.create_depot_ssl_context(
+        fqdn_host="10.66.6.3",
+        expected_thumbprint="00:" * 31 + "00",
+    )
+    with self.assertRaises(ssl.SSLCertVerificationError) as err_ctx:
+      ctx_bad.wrap_socket(dummy_sock, server_hostname="10.66.6.3")
+    self.assertIn("thumbprint mismatch", str(err_ctx.exception))
+    mock_ssock.close.assert_called_once()
 
 
 if __name__ == "__main__":
