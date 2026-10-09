@@ -432,15 +432,25 @@ class TestMain(unittest.TestCase):
     )
     mock_vm_mgr.return_value.deploy_ova.return_value = mock.MagicMock()
 
+    call_order = []
+    mock_pwd_mgr.return_value.reset_esxi_inventory_passwords.side_effect = (
+        lambda **kwargs: call_order.append("reset_passwords")
+    )
+    mock_esxi_cli.side_effect = lambda **kwargs: (
+        call_order.append("init_esxi_client"),
+        mock.MagicMock(),
+    )[1]
+
     exit_code = main_mod.run_pipeline("config.json")
     self.assertEqual(exit_code, 0)
     mock_gcp_cls.assert_called_once()
+    mock_pwd_mgr.return_value.reset_esxi_inventory_passwords.assert_called_once()
     mock_esxi_cli.assert_called_once_with(
         host_ip="10.0.0.5",
         user="root",
-        password=constants.PasswordResetDefaults.DEFAULT_INITIAL_SECRET,
-        fallback_password="NewESXiRoot123!",
+        password="NewESXiRoot123!",
     )
+    self.assertEqual(call_order, ["reset_passwords", "init_esxi_client"])
     mock_net_mgr.return_value.configure_networking.assert_called_once()
     mock_vsan_mgr.return_value.setup_vsan.assert_called_once()
     mock_vm_mgr.return_value.deploy_ova.assert_called_once()
@@ -457,7 +467,6 @@ class TestMain(unittest.TestCase):
         dns_server="10.0.0.2",
     )
     mock_vm_mgr.return_value.power_on_and_wait_for_ip.assert_called_once()
-    mock_pwd_mgr.return_value.reset_esxi_inventory_passwords.assert_called_once()
 
   @mock.patch("vcf_deployer.main.load_config")
   def test_run_pipeline_unhandled_exception_returns_exit_code_1(

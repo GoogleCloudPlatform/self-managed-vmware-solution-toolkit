@@ -1,4 +1,4 @@
-"""Phase 2b: vSAN Setup module.
+"""Phase 3b: vSAN Setup module.
 
 Handles automated vSAN Express Storage Architecture (ESA) cluster init,
 interactive SSH disk hardware discovery (queryVDQViaSSH pattern), bulk storage
@@ -28,7 +28,7 @@ class VSANManager:
     self.esxi = esxi
 
   def setup_vsan(self) -> None:
-    """Executes Phase 2b vSAN ESA cluster initialization and storage disk claim.
+    """Executes Phase 3b vSAN ESA cluster initialization and storage disk claim.
 
     Step A: Checks cluster active state via CLI (vsan cluster get). If active,
             skips init; otherwise executes vsan cluster new -x true.
@@ -43,7 +43,7 @@ class VSANManager:
     Raises:
         models.DeployerError: If cluster creation or storage claiming fails.
     """
-    logger.info("Phase 2b: Starting vSAN ESA initialization and disk checks...")
+    logger.info("Phase 3b: Starting vSAN ESA initialization and disk checks...")
 
     # Step 0 & A: Idempotency check and cluster instantiation
     self._check_and_init_cluster()
@@ -158,3 +158,4 @@ class VSANManager:
     self.esxi.execute_esxcli(
         ["vsan", "policy", "setdefault", "-c", policy_class, "-p", policy_name]
     )
+

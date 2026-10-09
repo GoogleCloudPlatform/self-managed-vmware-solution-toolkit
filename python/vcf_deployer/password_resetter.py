@@ -1,4 +1,4 @@
-"""Phase 3: ESXi Inventory Root Password Reset module.
+"""Phase 2: ESXi Inventory Root Password Reset module.
 
 Orchestrates root password reset on ESXi hosts.
 """
@@ -108,14 +108,14 @@ class PasswordResetter:
       context: models.ValidationContext,
       batch_size: int = constants.PasswordResetDefaults.DEFAULT_BATCH_SIZE,
   ) -> None:
-    """Executes Phase 3 password rotation across inventory in parallel batches.
+    """Executes Phase 2 password rotation across inventory in parallel batches.
 
     Args:
         context: ValidationContext holding host mappings and target password.
         batch_size: Max number of concurrent host resets per batch (default 10).
     """
     logger.info(
-        "Phase 3: Initiating inventory root password reset across hosts..."
+        "Phase 2: Initiating inventory root password reset across hosts..."
     )
     if not context.esxi_nodes:
       logger.warning(
@@ -174,4 +174,5 @@ class PasswordResetter:
             )
             raise
 
-    logger.info("Phase 3 inventory root password rotation concluded cleanly.")
+    logger.info("Phase 2 inventory root password rotation concluded cleanly.")
+

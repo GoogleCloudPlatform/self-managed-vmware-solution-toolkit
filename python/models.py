@@ -1,7 +1,7 @@
 """Data models, configuration schemas, and exception hierarchy.
 
 Defines core structures used across Phase 1 (Validation), Phase 2
-(Deployment), and Phase 3 (Password Reset), along with structured error
+(Password Reset), and Phase 3 (Deployment), along with structured error
 classification for retry mechanics.
 """
 
@@ -52,10 +52,10 @@ class NonRetryableError(DeployerError):
 
 @dataclasses.dataclass
 class VCFDeploymentConfig:
-  """Optional configuration block for Phase 2 VCF Installer deployment.
+  """Optional configuration block for Phase 3 VCF Installer deployment.
 
-  If omitted from DeployerConfig, the deployment pipeline skips Phase 2
-  mutations and advances directly to Phase 3 password rotation.
+  If omitted from DeployerConfig, the deployment pipeline completes after
+  Phase 2 password rotation and skips Phase 3 mutations.
   """
 
   target_gce_node: str

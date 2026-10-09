@@ -41,7 +41,7 @@ class ConfigKeys:
 
 
 class VCFConfigKeys:
-  """Keys for optional Phase 2 VCF deployment configuration block."""
+  """Keys for optional Phase 3 VCF deployment configuration block."""
 
   TARGET_GCE_NODE = "target_gce_node"
   VCF_APPLIANCE_LOCAL_USER = "vcf_appliance_local_user"
@@ -232,7 +232,7 @@ class OfflineDepotDefaults:
 
 
 class VSANConstants:
-  """Constants and policy definitions for Phase 2b vSAN ESA initialization."""
+  """Constants and policy definitions for Phase 3b vSAN ESA initialization."""
 
   ELIGIBLE_FOR_STORAGE_POOL = "eligible for use by storage pool"
   IN_USE_FOR_STORAGE_POOL = "in-use for storage pool"
@@ -263,7 +263,7 @@ class VSANConstants:
 
 
 class VMDeployerDefaults:
-  """Operational defaults and OVF property names for Phase 2c-e VM deployment."""
+  """Operational defaults and OVF property names for Phase 3c-f VM deployment."""
 
   DEFAULT_DATASTORE_NAME = "vsanDatastore"
   DISK_PROVISIONING_THIN = "thin"
@@ -292,7 +292,7 @@ class OVFPropertyKeys:
 
 
 class PasswordResetDefaults:
-  """Defaults for Phase 3 ESXi inventory root password reset."""
+  """Defaults for Phase 2 ESXi inventory root password reset."""
 
   DEFAULT_INITIAL_SECRET = "google1!"
   DEFAULT_BATCH_SIZE = 10
