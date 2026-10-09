@@ -1,4 +1,4 @@
-"""Phase 2a: ESXi Networking Setup module.
+"""Phase 3a: ESXi Networking Setup module.
 
 Configures standard virtual switch networking on target ESXi host,
 establishing an idempotent port group bound directly to vSwitch0 with the target
@@ -54,7 +54,7 @@ class NetworkManager:
         models.DeployerError: If network configuration fails.
     """
     logger.info(
-        "Phase 2a: Setting up port group for VLAN %d on switch '%s'...",
+        "Phase 3a: Setting up port group for VLAN %d on switch '%s'...",
         vlan_id,
         vswitch_name,
     )
@@ -129,3 +129,4 @@ class NetworkManager:
       raise models.NonRetryableError(
           f"Failed to add port group '{name}': {exc}"
       ) from exc
+

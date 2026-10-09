@@ -10,7 +10,7 @@ from vcf_deployer import vsan_setup
 
 
 class TestVSANManager(unittest.TestCase):
-  """Tests for Phase 2b VSANManager ESA cluster initialization and disk claiming."""
+  """Tests for Phase 3b VSANManager ESA cluster initialization and disk claiming."""
 
   def setUp(self):
     super().setUp()

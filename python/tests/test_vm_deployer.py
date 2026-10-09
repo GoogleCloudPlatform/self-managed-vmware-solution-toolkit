@@ -21,7 +21,7 @@ from vcf_deployer import vm_deployer
 
 
 class TestVMDeployer(unittest.TestCase):
-  """Tests for Phase 2c-e VMDeployer lifecycle operations."""
+  """Tests for Phase 3c-f VMDeployer lifecycle operations."""
 
   def setUp(self):
     super().setUp()
@@ -257,7 +257,7 @@ class TestVMDeployer(unittest.TestCase):
 
   @mock.patch.object(vm_deployer.VMDeployer, "_inject_guestinfo")
   def test_configure_ovf_environment(self, mock_inject):
-    """Verifies Phase 2d configure_ovf_environment orchestrator with default metadata DNS."""
+    """Verifies Phase 3d configure_ovf_environment orchestrator with default metadata DNS."""
     mock_vm = mock.MagicMock()
     self.vm_dep.configure_ovf_environment(
         vm_reference=mock_vm,
@@ -281,7 +281,7 @@ class TestVMDeployer(unittest.TestCase):
 
   @mock.patch.object(vm_deployer.VMDeployer, "_inject_guestinfo")
   def test_configure_ovf_environment_with_custom_dns_server(self, mock_inject):
-    """Verifies Phase 2d configure_ovf_environment orchestrator with custom DNS server."""
+    """Verifies Phase 3d configure_ovf_environment orchestrator with custom DNS server."""
     mock_vm = mock.MagicMock()
     self.vm_dep.configure_ovf_environment(
         vm_reference=mock_vm,
@@ -307,7 +307,7 @@ class TestVMDeployer(unittest.TestCase):
   @mock.patch.object(vm_deployer.VMDeployer, "_poll_for_guest_ip")
   @mock.patch.object(vm_deployer.VMDeployer, "_power_on_vm")
   def test_power_on_and_wait_for_ip(self, mock_power_on, mock_poll_ip):
-    """Verifies Phase 2e power_on_and_wait_for_ip orchestrator."""
+    """Verifies Phase 3e power_on_and_wait_for_ip orchestrator."""
     mock_vm = mock.MagicMock()
     self.vm_dep.power_on_and_wait_for_ip(
         vm_reference=mock_vm, target_ip="10.0.0.50"
@@ -650,7 +650,7 @@ class TestVMDeployer(unittest.TestCase):
   def test_deploy_ova_full_flow(
       self, mock_resolve, mock_check, mock_fetch_ovf, mock_execute_pull
   ):
-    """Verifies full Phase 2c deploy_ova flow when VM does not exist."""
+    """Verifies full Phase 3c deploy_ova flow when VM does not exist."""
     mock_resolve.return_value = ("pool", "folder", "ds", "net")
     mock_check.return_value = None
     mock_fetch_ovf.return_value = "<Envelope></Envelope>"
@@ -674,7 +674,7 @@ class TestVMDeployer(unittest.TestCase):
     mock_execute_pull.assert_called_once()
 
   # ============================================================================
-  # Phase 2f: VCF Cloud Builder HCL & Disk Validation Bypass Tests
+  # Phase 3f: VCF Cloud Builder HCL & Disk Validation Bypass Tests
   # ============================================================================
   @mock.patch("paramiko.SSHClient")
   def test_bypass_vcf_hcl_disk_validation_success(self, mock_ssh_cls):
