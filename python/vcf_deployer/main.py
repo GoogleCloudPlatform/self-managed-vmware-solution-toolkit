@@ -272,7 +272,7 @@ def run_pipeline(
     log_dir: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> int:
-  """Orchestrates execution across Phase 1, Phase 2 (a-e), and Phase 3.
+  """Orchestrates execution across Phase 1, Phase 2, and Phase 3 (a-f).
 
   Args:
       config_file_path: Target path to master JSON deployment document.
@@ -327,25 +327,30 @@ def run_pipeline(
     )
 
     # ======================================================================
-    # Phase 2: VCF Installer Deployment (Phase 2b active)
+    # Phase 2: ESXi Inventory Root Password Reset
+    # ======================================================================
+    pwd_mgr = password_resetter.PasswordResetter()
+    retry_with_backoff(pwd_mgr.reset_esxi_inventory_passwords, context=ctx)
+
+    # ======================================================================
+    # Phase 3: VCF Installer Deployment (Phase 3a-f)
     # ======================================================================
     if config.vcf_deployment_config and ctx.target_esxi_ip:
       logger.info(
-          "VCF profile detected. Advancing to Phase 2 against host %s...",
+          "VCF profile detected. Advancing to Phase 3 against host %s...",
           ctx.target_esxi_ip,
       )
 
-      # Initial connection uses default password before Phase 3 rotation,
-      # with fallback to new password if host was already configured.
+      # Inventory root passwords have been rotated in Phase 2;
+      # authenticate using the customer's target root password.
       esxi_cli = esxi_client.ESXiClient(
           host_ip=ctx.target_esxi_ip,
           user=constants.PasswordResetDefaults.DEFAULT_ROOT_USER,
-          password=constants.PasswordResetDefaults.DEFAULT_INITIAL_SECRET,
-          fallback_password=ctx.new_esxi_root_password,
+          password=ctx.new_esxi_root_password,
       )
 
       try:
-        # Phase 2a: Networking Setup (vSwitch0 port group configuration)
+        # Phase 3a: Networking Setup (vSwitch0 port group configuration)
         effective_pg = ctx.port_group_name
         net_mgr = network_setup.NetworkManager(esxi=esxi_cli)
         if ctx.vlan_id is not None and ctx.port_group_name:
@@ -356,11 +361,11 @@ def run_pipeline(
           )
           logger.info("Effective port group for deployment: %s", effective_pg)
 
-        # Phase 2b: vSAN ESA Cluster & Disk Setup
+        # Phase 3b: vSAN ESA Cluster & Disk Setup
         vsan_mgr = vsan_setup.VSANManager(esxi=esxi_cli)
         retry_with_backoff(vsan_mgr.setup_vsan)
 
-        # Phase 2c-e: VCF OVA Deployment & Bootstrapping via VMDeployer
+        # Phase 3c-f: VCF OVA Deployment & Bootstrapping via VMDeployer
         vm_mgr = vm_deployer.VMDeployer(esxi=esxi_cli)
         if ctx.vcf_installer_ova_url and effective_pg and ctx.vcf_vm_name:
           deploy_kwargs: Dict[str, Any] = {
@@ -376,7 +381,7 @@ def run_pipeline(
               **deploy_kwargs,
           )
 
-          # Phase 2d: OVF Environment Config (vCenter-less extraConfig)
+          # Phase 3d: OVF Environment Config (vCenter-less extraConfig)
           if (
               ctx.sddc_manager_gateway
               and ctx.sddc_manager_netmask
@@ -399,7 +404,7 @@ def run_pipeline(
                 dns_server=ctx.dns_server,
             )
 
-          # Phase 2e: VM Power On & IP Acquisition monitoring
+          # Phase 3e: VM Power On & IP Acquisition monitoring
           retry_with_backoff(
               vm_mgr.power_on_and_wait_for_ip,
               vm_reference=vm_ref,
@@ -412,7 +417,7 @@ def run_pipeline(
               ),
           )
 
-          # Phase 2f: Bypass vSAN HCL & Disk Claiming Validation on Cloud Builder
+          # Phase 3f: Bypass vSAN HCL & Disk Claiming Validation on Cloud Builder
           retry_with_backoff(
               vm_mgr.bypass_vcf_hcl_disk_validation,
               vcf_ip=ctx.vcf_installer_ip,
@@ -426,14 +431,8 @@ def run_pipeline(
         esxi_cli.disconnect()
     else:
       logger.info(
-          "vcf_deployment_config omitted; bypassing Phase 2 completely."
+          "vcf_deployment_config omitted; bypassing Phase 3 completely."
       )
-
-    # ======================================================================
-    # Phase 3: ESXi Inventory Root Password Reset
-    # ======================================================================
-    pwd_mgr = password_resetter.PasswordResetter()
-    retry_with_backoff(pwd_mgr.reset_esxi_inventory_passwords, context=ctx)
 
     logger.info("=" * 70)
     logger.info("VCF Deployment Automation completed across all phases!")

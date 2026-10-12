@@ -8,7 +8,7 @@ from vcf_deployer import password_resetter
 
 
 class TestPasswordResetter(unittest.TestCase):
-  """Tests for Phase 3 PasswordResetter inventory root password rotation."""
+  """Tests for Phase 2 PasswordResetter inventory root password rotation."""
 
   def setUp(self):
     super().setUp()

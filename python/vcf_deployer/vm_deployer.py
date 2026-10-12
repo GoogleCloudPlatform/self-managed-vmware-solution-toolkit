@@ -1,9 +1,10 @@
 """VCF Installer VM Deployment and Bootstrap Orchestrator module.
 
-Combines VCF installer VirtualMachine lifecycle operations across Phase 2c
-(streaming OVA direct URL NFC lease pulling), Phase 2d (vCenter-less OVF
-extraConfig environment injection via ReconfigVM_Task), and Phase 2e
-(idempotent power activation and guest networking telemetry polling).
+Combines VCF installer VirtualMachine lifecycle operations across Phase 3c
+(streaming OVA direct URL NFC lease pulling), Phase 3d (vCenter-less OVF
+extraConfig environment injection via ReconfigVM_Task), Phase 3e
+(idempotent power activation and guest networking telemetry polling), and
+Phase 3f (VCF appliance HCL bypass).
 """
 
 import datetime
@@ -75,7 +76,7 @@ class VMDeployer:
     self.esxi = esxi
 
   # ============================================================================
-  # Phase 2c: VCF Installer OVA Deployment
+  # Phase 3c: VCF Installer OVA Deployment
   # ============================================================================
 
   def deploy_ova(
@@ -87,7 +88,7 @@ class VMDeployer:
       expected_ova_sha256: Optional[str] = None,
       require_signature: bool = False,
   ) -> Any:
-    """Executes Phase 2c OVA deployment onto ESXi vSAN storage inventory.
+    """Executes Phase 3c OVA deployment onto ESXi vSAN storage inventory.
 
     Step A: Resource Resolution - Acquires root resource pool ('ha-root-pool'),
             root VM folder ('ha-folder-vm'), target port group, and datastore.
@@ -118,7 +119,7 @@ class VMDeployer:
           or OVA hash/signature verification failure.
     """
     logger.info(
-        "Phase 2c: Starting deployment of VM '%s' from %s...",
+        "Phase 3c: Starting deployment of VM '%s' from %s...",
         vcf_vm_name,
         vcf_installer_ova_url,
     )
@@ -1021,7 +1022,7 @@ class VMDeployer:
     raise models.RetryableError("Timed out waiting for task completion.")
 
   # ============================================================================
-  # Phase 2d: OVF Environment Configuration
+  # Phase 3d: OVF Environment Configuration
   # ============================================================================
 
   def configure_ovf_environment(
@@ -1037,9 +1038,9 @@ class VMDeployer:
       searchpath: str,
       dns_server: Optional[str] = None,
   ) -> None:
-    """Executes Phase 2d OVF environment configuration injection for deployed VM."""
+    """Executes Phase 3d OVF environment configuration injection for deployed VM."""
     logger.info(
-        "Phase 2d: Configuring OVF properties for appliance '%s' (%s)...",
+        "Phase 3d: Configuring OVF properties for appliance '%s' (%s)...",
         fqdn,
         sddc_manager_ip,
     )
@@ -1151,7 +1152,7 @@ class VMDeployer:
     self._wait_for_task(task)
 
   # ============================================================================
-  # Phase 2e: VM Power On & IP Acquisition Monitoring
+  # Phase 3e: VM Power On & IP Acquisition Monitoring
   # ============================================================================
 
   def power_on_and_wait_for_ip(
@@ -1165,9 +1166,9 @@ class VMDeployer:
           constants.DeployerDefaults.POWER_ON_TIMEOUT_SECONDS
       ),
   ) -> None:
-    """Executes Phase 2e VM power-on initialization and IP address readiness check."""
+    """Executes Phase 3e VM power-on initialization and IP address readiness check."""
     logger.info(
-        "Phase 2e: Initiating power management and IP check for %s...",
+        "Phase 3e: Initiating power management and IP check for %s...",
         target_ip,
     )
     self.esxi.connect_pyvmomi()
@@ -1243,7 +1244,7 @@ class VMDeployer:
     login_user = appliance_user if local_pwd else "root"
     login_pwd = local_pwd if local_pwd else root_pwd
     logger.info(
-        "Phase 2f: Connecting to VCF appliance at %s as '%s'...",
+        "Phase 3f: Connecting to VCF appliance at %s as '%s'...",
         vcf_ip,
         login_user,
     )

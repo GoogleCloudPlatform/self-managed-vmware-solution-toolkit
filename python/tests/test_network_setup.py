@@ -8,7 +8,7 @@ from vcf_deployer import network_setup
 
 
 class TestNetworkManager(unittest.TestCase):
-  """Tests for Phase 2a ESXi NetworkManager port group configuration."""
+  """Tests for Phase 3a ESXi NetworkManager port group configuration."""
 
   def setUp(self):
     super().setUp()
