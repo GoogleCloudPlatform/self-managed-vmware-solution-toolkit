@@ -126,8 +126,8 @@ data "google_compute_subnetwork" "existing_mgmt_subnet" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input Management subnetwork '${local.effective_mgmt_subnet_name}' does not belong to the input VPC network '${var.vpc_network}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input Management subnetwork '${local.effective_mgmt_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -140,8 +140,8 @@ data "google_compute_subnetwork" "existing_vsan_subnet" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input vSAN subnetwork '${local.effective_vsan_subnet_name}' does not belong to the input VPC network '${var.vpc_network}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input vSAN subnetwork '${local.effective_vsan_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -154,8 +154,8 @@ data "google_compute_subnetwork" "existing_vmotion_subnet" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input vMotion subnetwork '${local.effective_vmotion_subnet_name}' does not belong to the input VPC network '${var.vpc_network}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input vMotion subnetwork '${local.effective_vmotion_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -168,8 +168,8 @@ data "google_compute_subnetwork" "existing_nsx_tep_subnet" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input NSX TEP subnetwork '${local.effective_nsx_tep_subnet_name}' does not belong to the input VPC network '${var.vpc_network}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input NSX TEP subnetwork '${local.effective_nsx_tep_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -182,8 +182,8 @@ data "google_compute_subnetwork" "existing_dynamic_subnets" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input dynamic subnetwork '${each.value.subnet_name}' does not belong to the input VPC network '${var.vpc_network}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input dynamic subnetwork '${each.value.subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -225,6 +225,17 @@ data "google_compute_network_endpoint_group" "existing_mgmt_neg" {
   project = var.project_id
   name    = local.effective_mgmt_neg_name
   zone    = var.zone
+
+  lifecycle {
+    postcondition {
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input Management NEG '${local.effective_mgmt_neg_name}' either does not exist in project '${var.project_id}' zone '${var.zone}' or does not belong to the input VPC network '${var.vpc_network}'."
+    }
+    postcondition {
+      condition     = self.subnetwork != null && local.effective_mgmt_subnet_name != null ? endswith(self.subnetwork, "/regions/${var.region}/subnetworks/${local.effective_mgmt_subnet_name}") : false
+      error_message = "The input Management NEG '${local.effective_mgmt_neg_name}' either does not exist in project '${var.project_id}' zone '${var.zone}' or does not belong to the input Management subnetwork '${local.effective_mgmt_subnet_name}' in region '${var.region}'."
+    }
+  }
 }
 
 data "google_compute_network_endpoint_group" "existing_nsx_neg" {
@@ -232,6 +243,17 @@ data "google_compute_network_endpoint_group" "existing_nsx_neg" {
   project = var.project_id
   name    = local.effective_nsx_neg_name
   zone    = var.zone
+
+  lifecycle {
+    postcondition {
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input NSX NEG '${local.effective_nsx_neg_name}' either does not exist in project '${var.project_id}' zone '${var.zone}' or does not belong to the input VPC network '${var.vpc_network}'."
+    }
+    postcondition {
+      condition     = self.subnetwork != null && local.effective_nsx_tep_subnet_name != null ? endswith(self.subnetwork, "/regions/${var.region}/subnetworks/${local.effective_nsx_tep_subnet_name}") : false
+      error_message = "The input NSX NEG '${local.effective_nsx_neg_name}' either does not exist in project '${var.project_id}' zone '${var.zone}' or does not belong to the input NSX TEP subnetwork '${local.effective_nsx_tep_subnet_name}' in region '${var.region}'."
+    }
+  }
 }
 
 # ==============================================================================

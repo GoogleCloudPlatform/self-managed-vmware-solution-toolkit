@@ -83,6 +83,13 @@ data "google_compute_network" "existing_vpc" {
   count   = var.create_vpc ? 0 : 1
   project = var.project_id
   name    = local.vpc_name_only
+
+  lifecycle {
+    postcondition {
+      condition     = self.id != null
+      error_message = "The input VPC network '${local.vpc_network_name}' does not exist in project '${var.project_id}'."
+    }
+  }
 }
 
 # ==============================================================================
@@ -109,8 +116,8 @@ data "google_compute_subnetwork" "existing_gcp_subnet" {
 
   lifecycle {
     postcondition {
-      condition     = endswith(self.network, local.vpc_name_only)
-      error_message = "The input GCP subnetwork '${local.effective_gcp_subnet_name}' does not belong to the input VPC network '${local.vpc_network_name}'."
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input GCP subnetwork '${local.effective_gcp_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${local.vpc_network_name}'."
     }
   }
 }
@@ -174,6 +181,42 @@ resource "google_dns_managed_zone" "reverse_zone" {
   }
 
   depends_on = [google_compute_network.vpc]
+}
+
+# Existing Forward Managed Private DNS Zone Lookup (when setup_cloud_dns = true and create_dns_zones = false)
+data "google_dns_managed_zone" "existing_forward_zone" {
+  count   = (var.setup_cloud_dns && !var.create_dns_zones) ? 1 : 0
+  project = var.project_id
+  name    = local.effective_forward_zone_name
+
+  lifecycle {
+    postcondition {
+      condition     = self.visibility == "private"
+      error_message = "The input forward DNS managed zone '${local.effective_forward_zone_name}' must have 'private' visibility (found '${self.visibility}')."
+    }
+    postcondition {
+      condition     = local.formatted_domain_name == null || self.dns_name == local.formatted_domain_name
+      error_message = "The input forward DNS managed zone '${local.effective_forward_zone_name}' DNS name ('${self.dns_name}') does not match the input domain_name ('${local.formatted_domain_name}')."
+    }
+  }
+}
+
+# Existing Reverse Managed Private DNS Zone Lookup (when setup_cloud_dns = true and create_dns_zones = false)
+data "google_dns_managed_zone" "existing_reverse_zone" {
+  count   = (var.setup_cloud_dns && !var.create_dns_zones) ? 1 : 0
+  project = var.project_id
+  name    = local.effective_reverse_zone_name
+
+  lifecycle {
+    postcondition {
+      condition     = self.visibility == "private"
+      error_message = "The input reverse DNS managed zone '${local.effective_reverse_zone_name}' must have 'private' visibility (found '${self.visibility}')."
+    }
+    postcondition {
+      condition     = local.formatted_reverse_domain_name == null || self.dns_name == local.formatted_reverse_domain_name
+      error_message = "The input reverse DNS managed zone '${local.effective_reverse_zone_name}' DNS name ('${self.dns_name}') does not match the input reverse_domain_name ('${local.formatted_reverse_domain_name}')."
+    }
+  }
 }
 
 # Inbound DNS Forwarding Policy
