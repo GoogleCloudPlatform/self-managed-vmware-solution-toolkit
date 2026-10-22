@@ -299,19 +299,6 @@ resource "google_dns_record_set" "appliance_forward_a_records" {
   depends_on = [google_compute_forwarding_rule.mgmt_forwarding_rules]
 }
 
-resource "google_dns_record_set" "ntp_forward_a_record" {
-  count        = (var.setup_cloud_dns && var.ntp_ip != null && var.ntp_ip != "" && var.forward_zone_name != null && var.forward_zone_name != "") ? 1 : 0
-  project      = var.project_id
-  name         = "ntp.${local.formatted_domain_name}"
-  managed_zone = var.forward_zone_name
-  type         = "A"
-  ttl          = var.dns_ttl
-  rrdatas      = [var.ntp_ip]
-  lifecycle {
-    ignore_changes = [rrdatas]
-  }
-}
-
 resource "google_dns_record_set" "appliance_reverse_ptr_records" {
   for_each     = (var.setup_cloud_dns && var.reverse_zone_name != null && var.reverse_zone_name != "") ? local.appliance_dns_records : {}
   project      = var.project_id
