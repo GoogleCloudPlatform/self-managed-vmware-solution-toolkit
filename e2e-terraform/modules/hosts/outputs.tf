@@ -37,14 +37,14 @@ output "node_primary_ips" {
   description = "Alias for Management NIC IP addresses for compatibility"
 }
 
-output "node_vsan_ips" {
+output "node_vmotion_ips" {
   value       = [for n in local.effective_node_names : google_compute_instance.nodes[n].network_interface[1].network_ip]
-  description = "List of vSAN NIC IP addresses assigned to ESXi hosts"
+  description = "List of vMotion NIC IP addresses assigned to ESXi hosts"
 }
 
-output "node_vmotion_ips" {
+output "node_vsan_ips" {
   value       = [for n in local.effective_node_names : google_compute_instance.nodes[n].network_interface[2].network_ip]
-  description = "List of vMotion NIC IP addresses assigned to ESXi hosts"
+  description = "List of vSAN NIC IP addresses assigned to ESXi hosts"
 }
 
 output "node_nsx_tep_ips" {
@@ -81,14 +81,14 @@ output "primary_reserved_addresses" {
   description = "Alias for Management reserved IP addresses for compatibility"
 }
 
-output "vsan_reserved_addresses" {
-  value       = module.vsan_ip_allocator.reserved_addresses
-  description = "List of reserved vSAN IP addresses (empty if not reserved)"
-}
-
 output "vmotion_reserved_addresses" {
   value       = module.vmotion_ip_allocator.reserved_addresses
   description = "List of reserved vMotion IP addresses (empty if not reserved)"
+}
+
+output "vsan_reserved_addresses" {
+  value       = module.vsan_ip_allocator.reserved_addresses
+  description = "List of reserved vSAN IP addresses (empty if not reserved)"
 }
 
 output "nsx_tep_reserved_addresses" {

@@ -29,13 +29,13 @@ locals {
     var.mgmt_subnet_name != null ? var.mgmt_subnet_name : "${var.resource_name_prefix}-mgmt-subnet"
   ) : var.mgmt_subnet_name
 
-  effective_vsan_subnet_name = var.create_subnets_and_negs ? (
-    var.vsan_subnet_name != null ? var.vsan_subnet_name : "${var.resource_name_prefix}-vsan-subnet"
-  ) : var.vsan_subnet_name
-
   effective_vmotion_subnet_name = var.create_subnets_and_negs ? (
     var.vmotion_subnet_name != null ? var.vmotion_subnet_name : "${var.resource_name_prefix}-vmotion-subnet"
   ) : var.vmotion_subnet_name
+
+  effective_vsan_subnet_name = var.create_subnets_and_negs ? (
+    var.vsan_subnet_name != null ? var.vsan_subnet_name : "${var.resource_name_prefix}-vsan-subnet"
+  ) : var.vsan_subnet_name
 
   effective_nsx_tep_subnet_name = var.create_subnets_and_negs ? (
     var.nsx_tep_subnet_name != null ? var.nsx_tep_subnet_name : "${var.resource_name_prefix}-nsx-tep-subnet"
@@ -66,24 +66,24 @@ resource "google_compute_subnetwork" "mgmt_subnet" {
   private_ip_google_access = true
 }
 
-# vSAN Storage Subnetwork
-resource "google_compute_subnetwork" "vsan_subnet" {
-  count                    = var.create_subnets_and_negs ? 1 : 0
-  project                  = var.project_id
-  name                     = local.effective_vsan_subnet_name
-  ip_cidr_range            = var.vsan_subnet_cidr
-  region                   = var.region
-  network                  = var.vpc_network
-  resolve_subnet_mask      = "ARP_BROADCAST_PRIMARY_RANGE_WITH_LEARNING"
-  private_ip_google_access = true
-}
-
 # vMotion Migration Subnetwork
 resource "google_compute_subnetwork" "vmotion_subnet" {
   count                    = var.create_subnets_and_negs ? 1 : 0
   project                  = var.project_id
   name                     = local.effective_vmotion_subnet_name
   ip_cidr_range            = var.vmotion_subnet_cidr
+  region                   = var.region
+  network                  = var.vpc_network
+  resolve_subnet_mask      = "ARP_BROADCAST_PRIMARY_RANGE_WITH_LEARNING"
+  private_ip_google_access = true
+}
+
+# vSAN Storage Subnetwork
+resource "google_compute_subnetwork" "vsan_subnet" {
+  count                    = var.create_subnets_and_negs ? 1 : 0
+  project                  = var.project_id
+  name                     = local.effective_vsan_subnet_name
+  ip_cidr_range            = var.vsan_subnet_cidr
   region                   = var.region
   network                  = var.vpc_network
   resolve_subnet_mask      = "ARP_BROADCAST_PRIMARY_RANGE_WITH_LEARNING"
@@ -132,20 +132,6 @@ data "google_compute_subnetwork" "existing_mgmt_subnet" {
   }
 }
 
-data "google_compute_subnetwork" "existing_vsan_subnet" {
-  count   = var.create_subnets_and_negs ? 0 : 1
-  project = var.project_id
-  name    = local.effective_vsan_subnet_name
-  region  = var.region
-
-  lifecycle {
-    postcondition {
-      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
-      error_message = "The input vSAN subnetwork '${local.effective_vsan_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
-    }
-  }
-}
-
 data "google_compute_subnetwork" "existing_vmotion_subnet" {
   count   = var.create_subnets_and_negs ? 0 : 1
   project = var.project_id
@@ -156,6 +142,20 @@ data "google_compute_subnetwork" "existing_vmotion_subnet" {
     postcondition {
       condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
       error_message = "The input vMotion subnetwork '${local.effective_vmotion_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
+    }
+  }
+}
+
+data "google_compute_subnetwork" "existing_vsan_subnet" {
+  count   = var.create_subnets_and_negs ? 0 : 1
+  project = var.project_id
+  name    = local.effective_vsan_subnet_name
+  region  = var.region
+
+  lifecycle {
+    postcondition {
+      condition     = self.network != null ? endswith(self.network, "/${local.vpc_name_only}") : false
+      error_message = "The input vSAN subnetwork '${local.effective_vsan_subnet_name}' either does not exist in project '${var.project_id}' region '${var.region}' or does not belong to the input VPC network '${var.vpc_network}'."
     }
   }
 }
@@ -264,11 +264,11 @@ check "validate_existing_subnet_names" {
   assert {
     condition = var.create_subnets_and_negs || (
       (var.mgmt_subnet_name != null && var.mgmt_subnet_name != "") &&
-      (var.vsan_subnet_name != null && var.vsan_subnet_name != "") &&
       (var.vmotion_subnet_name != null && var.vmotion_subnet_name != "") &&
+      (var.vsan_subnet_name != null && var.vsan_subnet_name != "") &&
       (var.nsx_tep_subnet_name != null && var.nsx_tep_subnet_name != "")
     )
-    error_message = "When create_subnets_and_negs is false, all required subnet names (mgmt_subnet_name, vsan_subnet_name, vmotion_subnet_name, nsx_tep_subnet_name) must be explicitly provided."
+    error_message = "When create_subnets_and_negs is false, all required subnet names (mgmt_subnet_name, vmotion_subnet_name, vsan_subnet_name, nsx_tep_subnet_name) must be explicitly provided."
   }
 }
 
@@ -276,13 +276,13 @@ check "subnet_cidr_when_creating" {
   assert {
     condition = !var.create_subnets_and_negs || (
       (var.mgmt_subnet_cidr != null && var.mgmt_subnet_cidr != "") &&
-      (var.vsan_subnet_cidr != null && var.vsan_subnet_cidr != "") &&
       (var.vmotion_subnet_cidr != null && var.vmotion_subnet_cidr != "") &&
+      (var.vsan_subnet_cidr != null && var.vsan_subnet_cidr != "") &&
       (var.nsx_tep_subnet_cidr != null && var.nsx_tep_subnet_cidr != "") &&
       alltrue([
         for s in var.additional_dynamic_subnets : s.subnet_cidr != null && s.subnet_cidr != ""
       ])
     )
-    error_message = "Subnet CIDR range (mgmt_subnet_cidr, vsan_subnet_cidr, vmotion_subnet_cidr, nsx_tep_subnet_cidr, and dynamic subnet_cidrs) must be provided whenever creating a new subnet."
+    error_message = "Subnet CIDR range (mgmt_subnet_cidr, vmotion_subnet_cidr, vsan_subnet_cidr, nsx_tep_subnet_cidr, and dynamic subnet_cidrs) must be provided whenever creating a new subnet."
   }
 }

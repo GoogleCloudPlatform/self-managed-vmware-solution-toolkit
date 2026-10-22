@@ -32,7 +32,7 @@ resource "google_compute_subnetwork" "created_subnet" {
   project                  = var.project_id
   private_ip_google_access = true
 
-  description = "Subnet created for SMVE Toolkit Jumpbox VM in the VPC hosting the ESXi nodes"
+  description = "Subnet created for SMVS Toolkit Jumpbox VM in the VPC hosting the ESXi nodes"
 
   lifecycle {
     precondition {
@@ -119,7 +119,7 @@ resource "google_compute_router" "nat_router" {
   region  = var.region
   project = var.project_id
 
-  description = "Cloud Router for SMVE Toolkit Jumpbox NAT gateway in the ESXi VPC"
+  description = "Cloud Router for SMVS Toolkit Jumpbox NAT gateway in the ESXi VPC"
 }
 
 # ------------------------------------------------------------------------------
@@ -155,5 +155,5 @@ resource "google_compute_route" "default_internet_route" {
   priority         = 1000
   project          = var.project_id
 
-  description = "Default route to default-internet-gateway for SMVE Toolkit Jumpbox Cloud NAT internet egress in the ESXi VPC"
+  description = "Default route to default-internet-gateway for SMVS Toolkit Jumpbox Cloud NAT internet egress in the ESXi VPC"
 }

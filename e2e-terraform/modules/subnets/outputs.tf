@@ -21,14 +21,14 @@ output "mgmt_subnet_self_link" {
   description = "Management subnetwork self-link URL"
 }
 
-output "vsan_subnet_self_link" {
-  value       = var.create_subnets_and_negs ? (length(google_compute_subnetwork.vsan_subnet) > 0 ? google_compute_subnetwork.vsan_subnet[0].self_link : null) : (length(data.google_compute_subnetwork.existing_vsan_subnet) > 0 ? data.google_compute_subnetwork.existing_vsan_subnet[0].self_link : null)
-  description = "vSAN storage subnetwork self-link URL"
-}
-
 output "vmotion_subnet_self_link" {
   value       = var.create_subnets_and_negs ? (length(google_compute_subnetwork.vmotion_subnet) > 0 ? google_compute_subnetwork.vmotion_subnet[0].self_link : null) : (length(data.google_compute_subnetwork.existing_vmotion_subnet) > 0 ? data.google_compute_subnetwork.existing_vmotion_subnet[0].self_link : null)
   description = "vMotion migration subnetwork self-link URL"
+}
+
+output "vsan_subnet_self_link" {
+  value       = var.create_subnets_and_negs ? (length(google_compute_subnetwork.vsan_subnet) > 0 ? google_compute_subnetwork.vsan_subnet[0].self_link : null) : (length(data.google_compute_subnetwork.existing_vsan_subnet) > 0 ? data.google_compute_subnetwork.existing_vsan_subnet[0].self_link : null)
+  description = "vSAN storage subnetwork self-link URL"
 }
 
 output "nsx_tep_subnet_self_link" {
@@ -67,16 +67,6 @@ output "mgmt_subnet_cidr" {
   description = "Management subnetwork IPv4 CIDR range"
 }
 
-output "vsan_subnet_name" {
-  value       = local.effective_vsan_subnet_name
-  description = "vSAN storage subnetwork name"
-}
-
-output "vsan_subnet_cidr" {
-  value       = var.create_subnets_and_negs ? var.vsan_subnet_cidr : (length(data.google_compute_subnetwork.existing_vsan_subnet) > 0 ? data.google_compute_subnetwork.existing_vsan_subnet[0].ip_cidr_range : null)
-  description = "vSAN storage subnetwork IPv4 CIDR range"
-}
-
 output "vmotion_subnet_name" {
   value       = local.effective_vmotion_subnet_name
   description = "vMotion migration subnetwork name"
@@ -85,6 +75,16 @@ output "vmotion_subnet_name" {
 output "vmotion_subnet_cidr" {
   value       = var.create_subnets_and_negs ? var.vmotion_subnet_cidr : (length(data.google_compute_subnetwork.existing_vmotion_subnet) > 0 ? data.google_compute_subnetwork.existing_vmotion_subnet[0].ip_cidr_range : null)
   description = "vMotion migration subnetwork IPv4 CIDR range"
+}
+
+output "vsan_subnet_name" {
+  value       = local.effective_vsan_subnet_name
+  description = "vSAN storage subnetwork name"
+}
+
+output "vsan_subnet_cidr" {
+  value       = var.create_subnets_and_negs ? var.vsan_subnet_cidr : (length(data.google_compute_subnetwork.existing_vsan_subnet) > 0 ? data.google_compute_subnetwork.existing_vsan_subnet[0].ip_cidr_range : null)
+  description = "vSAN storage subnetwork IPv4 CIDR range"
 }
 
 output "nsx_tep_subnet_name" {

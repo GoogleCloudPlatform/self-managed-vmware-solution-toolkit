@@ -86,13 +86,13 @@ module "subnets" {
   mgmt_subnet_cidr = var.mgmt_subnet_cidr
   mgmt_neg_name    = var.mgmt_neg_name
 
-  # vSAN Subnet
-  vsan_subnet_name = var.vsan_subnet_name
-  vsan_subnet_cidr = var.vsan_subnet_cidr
-
   # vMotion Subnet
   vmotion_subnet_name = var.vmotion_subnet_name
   vmotion_subnet_cidr = var.vmotion_subnet_cidr
+
+  # vSAN Subnet
+  vsan_subnet_name = var.vsan_subnet_name
+  vsan_subnet_cidr = var.vsan_subnet_cidr
 
   # NSX TEP Subnet & NEG
   nsx_tep_subnet_name = var.nsx_tep_subnet_name
@@ -137,19 +137,19 @@ module "hosts" {
   mgmt_ip_address_type = var.mgmt_nic_ip_address_type
   mgmt_ip_values       = var.mgmt_nic_ip_values
 
-  # vSAN NIC
-  vsan_subnet_name     = module.subnets.vsan_subnet_name
-  vsan_subnet_cidr     = var.vsan_subnet_cidr
-  vsan_vlan_id         = var.vsan_vlan_id
-  vsan_ip_address_type = var.vsan_ip_address_type
-  vsan_ip_values       = var.vsan_ip_values
-
   # vMotion NIC
   vmotion_subnet_name     = module.subnets.vmotion_subnet_name
   vmotion_subnet_cidr     = var.vmotion_subnet_cidr
   vmotion_vlan_id         = var.vmotion_vlan_id
   vmotion_ip_address_type = var.vmotion_ip_address_type
   vmotion_ip_values       = var.vmotion_ip_values
+
+  # vSAN NIC
+  vsan_subnet_name     = module.subnets.vsan_subnet_name
+  vsan_subnet_cidr     = var.vsan_subnet_cidr
+  vsan_vlan_id         = var.vsan_vlan_id
+  vsan_ip_address_type = var.vsan_ip_address_type
+  vsan_ip_values       = var.vsan_ip_values
 
   # NSX TEP NIC
   nsx_tep_subnet_name     = module.subnets.nsx_tep_subnet_name

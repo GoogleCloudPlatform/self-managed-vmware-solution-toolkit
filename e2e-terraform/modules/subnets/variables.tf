@@ -71,26 +71,6 @@ variable "mgmt_neg_name" {
 }
 
 # ------------------------------------------------------------------------------
-# vSAN Storage Subnetwork
-# ------------------------------------------------------------------------------
-
-variable "vsan_subnet_name" {
-  type        = string
-  default     = null
-  description = "Name of the vSAN storage subnetwork. Expected to exist in GCP if create_subnets_and_negs is false."
-}
-
-variable "vsan_subnet_cidr" {
-  type        = string
-  default     = null
-  description = "IPv4 CIDR range for vSAN storage subnetwork (required if create_subnets_and_negs = true)."
-  validation {
-    condition     = var.vsan_subnet_cidr == null || can(cidrnetmask(var.vsan_subnet_cidr))
-    error_message = "vsan_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.2.0/24)."
-  }
-}
-
-# ------------------------------------------------------------------------------
 # vMotion Migration Subnetwork
 # ------------------------------------------------------------------------------
 
@@ -106,7 +86,27 @@ variable "vmotion_subnet_cidr" {
   description = "IPv4 CIDR range for vMotion migration subnetwork (required if create_subnets_and_negs = true)."
   validation {
     condition     = var.vmotion_subnet_cidr == null || can(cidrnetmask(var.vmotion_subnet_cidr))
-    error_message = "vmotion_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.3.0/24)."
+    error_message = "vmotion_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.2.0/24)."
+  }
+}
+
+# ------------------------------------------------------------------------------
+# vSAN Storage Subnetwork
+# ------------------------------------------------------------------------------
+
+variable "vsan_subnet_name" {
+  type        = string
+  default     = null
+  description = "Name of the vSAN storage subnetwork. Expected to exist in GCP if create_subnets_and_negs is false."
+}
+
+variable "vsan_subnet_cidr" {
+  type        = string
+  default     = null
+  description = "IPv4 CIDR range for vSAN storage subnetwork (required if create_subnets_and_negs = true)."
+  validation {
+    condition     = var.vsan_subnet_cidr == null || can(cidrnetmask(var.vsan_subnet_cidr))
+    error_message = "vsan_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.3.0/24)."
   }
 }
 

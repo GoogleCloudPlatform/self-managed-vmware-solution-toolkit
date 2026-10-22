@@ -14,7 +14,7 @@
 
 # ==============================================================================
 # File: infrastructure/main.tf
-# Description: Main entry point for SMVE Toolkit Jumpbox Terraform module.
+# Description: Main entry point for SMVS Toolkit Jumpbox Terraform module.
 #              Orchestrates network/subnet creation in the VPC hosting the ESXi nodes,
 #              IAP firewall rules, Cloud Router, Cloud NAT, and jumpbox GCE instance deployment.
 # ==============================================================================

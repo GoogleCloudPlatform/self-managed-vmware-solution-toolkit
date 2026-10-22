@@ -44,7 +44,7 @@ variable "jumpbox_ssh_user" {
 
 variable "jumpbox_script_runner" {
   type        = string
-  description = "The human user identity (e.g., 'user:admin@example.com') executing the SMVE Toolkit Python scripts on the jumpbox. Service accounts are not allowed."
+  description = "The human user identity (e.g., 'user:admin@example.com') executing the SMVS Toolkit Python scripts on the jumpbox. Service accounts are not allowed."
 
   validation {
     condition     = can(regex("^(user:)?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.jumpbox_script_runner)) && !startswith(var.jumpbox_script_runner, "serviceAccount:") && !endswith(var.jumpbox_script_runner, ".gserviceaccount.com")

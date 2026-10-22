@@ -24,7 +24,7 @@
 #          NOTE: If `node_names` was not specified (left null/unspecified), it should NOT be changed during Day-2 operations.
 #        * If `availability_domains` was explicitly specified as a list, append the availability domain assignment for the new node(s) (e.g., 5).
 #          NOTE: If `availability_domains` was not specified (left null/unspecified), it should NOT be changed during Day-2 operations.
-#        * For network interfaces using custom IP modes ("reserved_custom" or "ephemeral_custom"), append the IP address(es) for the new node(s) to `mgmt_nic_ip_values`, `vsan_ip_values`, `vmotion_ip_values`, `nsx_tep_ip_values`, and dynamic NIC `ip_values`.
+#        * For network interfaces using custom IP modes ("reserved_custom" or "ephemeral_custom"), append the IP address(es) for the new node(s) to `mgmt_nic_ip_values`, `vmotion_ip_values`, `vsan_ip_values`, `nsx_tep_ip_values`, and dynamic NIC `ip_values`.
 #          NOTE: New IPs must not be reserved or repeated, and must skip the subnet's DNS reserved IP (see IP ADDRESS INPUT GUIDELINES below).
 #          NOTE: If automatic IP modes ("ephemeral_automatic" or "reserved_automatic") were used and IP values lists were left empty/unspecified, they should NOT be changed during Day-2 operations.
 #    - Run `terraform apply`.
@@ -41,7 +41,7 @@
 #        * ALWAYS explicitly specify `availability_domains` as the exact list of availability domain IDs of the remaining nodes (in the same order as the remaining nodes).
 #          NOTE: This is REQUIRED in node_deletion mode even if `availability_domains` was NOT specified (left null/unspecified) during cluster creation or any prior Day-2 operation triggered from Terraform.
 #          Otherwise, the automatic round-robin AD assignment (index-based) is recomputed for the remaining nodes, which can change the ADs of existing nodes and force their recreation.
-#        * For custom IP modes, remove its IP address from `mgmt_nic_ip_values`, `vsan_ip_values`, `vmotion_ip_values`, `nsx_tep_ip_values`, and dynamic NIC `ip_values`.
+#        * For custom IP modes, remove its IP address from `mgmt_nic_ip_values`, `vmotion_ip_values`, `vsan_ip_values`, `nsx_tep_ip_values`, and dynamic NIC `ip_values`.
 #    - Run `terraform apply`. Terraform will smoothly destroy the specified node instance, its boot disk,
 #      its reserved IPs, and its Cloud DNS A/PTR records without affecting remaining nodes.
 #
@@ -53,7 +53,7 @@
 #
 # IP ADDRESS INPUT GUIDELINES (apply to EVERY IP-related input in this file):
 # ------------------------------------------------------------------------------
-#    - Do NOT input reserved or repeated IP addresses. Every IP address specified in this file (`mgmt_nic_ip_values`, `vsan_ip_values`, `vmotion_ip_values`, `nsx_tep_ip_values`, dynamic NIC `ip_values`,
+#    - Do NOT input reserved or repeated IP addresses. Every IP address specified in this file (`mgmt_nic_ip_values`, `vmotion_ip_values`, `vsan_ip_values`, `nsx_tep_ip_values`, dynamic NIC `ip_values`,
 #      `mgmt_ip_values` and `nsx_ip_values`, including every IP expanded from an IP range string) must be unique
 #      across all inputs and must not already be in use or reserved in the subnetwork.
 #    - GCP reserves the network address, the default gateway (e.g., "10.200.0.1" in "10.200.0.0/24"), the second-to-last
@@ -215,21 +215,7 @@ mgmt_subnet_cidr = "10.200.0.0/24"
 mgmt_neg_name = "vcf-mgmt-sample-neg"
 
 # ------------------------------------------------------------------------------
-# 3.2 vSAN Storage Subnet
-# ------------------------------------------------------------------------------
-
-# Description: Name of the vSAN storage L2 subnetwork (VLAN tagged). Created if create_subnets_and_negs = true (defaults to "<resource_name_prefix>-vsan-subnet" if null), or referenced if false.
-# Valid Values: Valid subnetwork name string, or null.
-# Default Value: null (Optional)
-vsan_subnet_name = "vcf-mgmt-sample-vsan-subnet"
-
-# Description: IPv4 CIDR range for the vSAN storage subnetwork. Required when create_subnets_and_negs = true.
-# Valid Values: Valid IPv4 CIDR block string (e.g., "10.200.1.0/24").
-# Default Value: null (Conditional - Required when create_subnets_and_negs = true)
-vsan_subnet_cidr = "10.200.1.0/24"
-
-# ------------------------------------------------------------------------------
-# 3.3 vMotion Migration Subnet
+# 3.2 vMotion Migration Subnet
 # ------------------------------------------------------------------------------
 
 # Description: Name of the vMotion live migration L2 subnetwork (VLAN tagged). Created if create_subnets_and_negs = true (defaults to "<resource_name_prefix>-vmotion-subnet" if null), or referenced if false.
@@ -238,9 +224,23 @@ vsan_subnet_cidr = "10.200.1.0/24"
 vmotion_subnet_name = "vcf-mgmt-sample-vmotion-subnet"
 
 # Description: IPv4 CIDR range for the vMotion live migration subnetwork. Required when create_subnets_and_negs = true.
+# Valid Values: Valid IPv4 CIDR block string (e.g., "10.200.1.0/24").
+# Default Value: null (Conditional - Required when create_subnets_and_negs = true)
+vmotion_subnet_cidr = "10.200.1.0/24"
+
+# ------------------------------------------------------------------------------
+# 3.3 vSAN Storage Subnet
+# ------------------------------------------------------------------------------
+
+# Description: Name of the vSAN storage L2 subnetwork (VLAN tagged). Created if create_subnets_and_negs = true (defaults to "<resource_name_prefix>-vsan-subnet" if null), or referenced if false.
+# Valid Values: Valid subnetwork name string, or null.
+# Default Value: null (Optional)
+vsan_subnet_name = "vcf-mgmt-sample-vsan-subnet"
+
+# Description: IPv4 CIDR range for the vSAN storage subnetwork. Required when create_subnets_and_negs = true.
 # Valid Values: Valid IPv4 CIDR block string (e.g., "10.200.2.0/24").
 # Default Value: null (Conditional - Required when create_subnets_and_negs = true)
-vmotion_subnet_cidr = "10.200.2.0/24"
+vsan_subnet_cidr = "10.200.2.0/24"
 
 # ------------------------------------------------------------------------------
 # 3.4 NSX TEP Overlay Subnet & NEG
@@ -386,7 +386,7 @@ vmotion_ip_address_type = "reserved_custom"
 # Description: List of explicit IP addresses for vMotion NICs. Required when vmotion_ip_address_type is "reserved_custom" or "ephemeral_custom" (must contain number_of_nodes entries). Leave empty ([]) for "reserved_automatic" or "ephemeral_automatic".
 # Valid Values: List of valid IPv4 address strings in vmotion_subnet_cidr. Do NOT input reserved or repeated IPs, including the subnet's DNS reserved IP (see IP ADDRESS INPUT GUIDELINES at the top of this file).
 # Default Value: [] (Conditional)
-vmotion_ip_values = ["10.200.2.3", "10.200.2.4", "10.200.2.5", "10.200.2.6"]
+vmotion_ip_values = ["10.200.1.3", "10.200.1.4", "10.200.1.5", "10.200.1.6"]
 
 # ------------------------------------------------------------------------------
 # 4.3 vSAN NIC Configuration
@@ -405,7 +405,7 @@ vsan_ip_address_type = "reserved_custom"
 # Description: List of explicit IP addresses for vSAN NICs. Required when vsan_ip_address_type is "reserved_custom" or "ephemeral_custom" (must contain number_of_nodes entries). Leave empty ([]) for "reserved_automatic" or "ephemeral_automatic".
 # Valid Values: List of valid non-conflicting IPv4 address strings in vsan_subnet_cidr. Do NOT input reserved or repeated IPs, including the subnet's DNS reserved IP (see IP ADDRESS INPUT GUIDELINES at the top of this file).
 # Default Value: [] (Conditional)
-vsan_ip_values = ["10.200.1.3", "10.200.1.4", "10.200.1.5", "10.200.1.6"]
+vsan_ip_values = ["10.200.2.3", "10.200.2.4", "10.200.2.5", "10.200.2.6"]
 
 # ------------------------------------------------------------------------------
 # 4.4 NSX TEP NIC Configuration

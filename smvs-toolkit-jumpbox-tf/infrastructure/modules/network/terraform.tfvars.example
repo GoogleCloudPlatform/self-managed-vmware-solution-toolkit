@@ -28,7 +28,7 @@ service_account_email = "123456789012-compute@developer.gserviceaccount.com"
 # Scenario A: Create a NEW Subnet (default)
 create_subnet = true
 vpc_name      = "my-custom-vpc" # Must be the same VPC hosting the ESXi nodes
-subnet_name   = "smve-toolkit-jumpbox-subnet"
+subnet_name   = "smvs-toolkit-jumpbox-subnet"
 subnet_cidr   = "10.10.0.0/28" # Minimum /29 required for GCP subnets
 
 # Scenario B: Use an EXISTING Subnet

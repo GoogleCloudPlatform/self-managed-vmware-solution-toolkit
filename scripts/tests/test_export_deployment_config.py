@@ -1211,8 +1211,8 @@ class TestMainWorkflow(unittest.TestCase):
         "networkSpecs": [
             {
                 "standbyUplinks": [],
-                "vlanId": 200,
-                "mtu": 8700,
+                "vlanId": 2,
+                "mtu": 8896,
                 "includeIpAddress": ["10.200.2.3", "10.200.2.4", "10.200.2.5"],
                 "activeUplinks": ["uplink0"],
                 "ipAddressVersion": "IPv4",

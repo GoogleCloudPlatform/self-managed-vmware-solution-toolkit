@@ -20,16 +20,16 @@ locals {
   all_vpc_subnet_names = compact(concat([
     module.vpc.gcp_subnet_name,
     module.subnets.mgmt_subnet_name,
-    module.subnets.vsan_subnet_name,
     module.subnets.vmotion_subnet_name,
+    module.subnets.vsan_subnet_name,
     module.subnets.nsx_tep_subnet_name
   ], [for s in values(module.subnets.dynamic_subnets) : s.name]))
 
   all_vpc_subnet_self_links = compact(concat([
     module.vpc.gcp_subnet_self_link,
     module.subnets.mgmt_subnet_self_link,
-    module.subnets.vsan_subnet_self_link,
     module.subnets.vmotion_subnet_self_link,
+    module.subnets.vsan_subnet_self_link,
     module.subnets.nsx_tep_subnet_self_link
   ], [for s in values(module.subnets.dynamic_subnets) : s.self_link]))
 
@@ -37,8 +37,8 @@ locals {
   all_vpc_subnet_cidrs = compact(concat([
     module.vpc.gcp_subnet_cidr,
     module.subnets.mgmt_subnet_cidr,
-    module.subnets.vsan_subnet_cidr,
     module.subnets.vmotion_subnet_cidr,
+    module.subnets.vsan_subnet_cidr,
     module.subnets.nsx_tep_subnet_cidr
   ], [for s in values(module.subnets.dynamic_subnets) : s.cidr]))
 
@@ -179,8 +179,8 @@ output "gcp_resources_self_links" {
       network         = module.vpc.vpc_network_self_link
       gcp_subnet      = module.vpc.gcp_subnet_self_link
       primary_subnet  = module.subnets.mgmt_subnet_self_link
-      vsan_subnet     = module.subnets.vsan_subnet_self_link
       vmotion_subnet  = module.subnets.vmotion_subnet_self_link
+      vsan_subnet     = module.subnets.vsan_subnet_self_link
       nsx_tep_subnet  = module.subnets.nsx_tep_subnet_self_link
       dynamic_subnets = { for k, v in module.subnets.dynamic_subnets : k => v.self_link }
     }
@@ -193,8 +193,8 @@ output "gcp_resources_self_links" {
       nsx_neg          = module.subnets.nsx_neg_self_link
       reserved_ips = {
         primary = module.hosts.primary_reserved_addresses
-        vsan    = module.hosts.vsan_reserved_addresses
         vmotion = module.hosts.vmotion_reserved_addresses
+        vsan    = module.hosts.vsan_reserved_addresses
         nsx_tep = module.hosts.nsx_tep_reserved_addresses
         dynamic = module.hosts.dynamic_reserved_addresses
       }
@@ -333,7 +333,7 @@ output "management_domain_deployment_input_config" {
           "VMOTION",
           "VSAN"
         ]
-        mtu = 8700
+        mtu = 8896
         nsxTeamings = [
           {
             policy = "LOADBALANCE_SRCID"
@@ -394,7 +394,7 @@ output "management_domain_deployment_input_config" {
         subnet       = module.subnets.mgmt_subnet_cidr
         gateway      = module.subnets.mgmt_subnet_cidr != null ? cidrhost(module.subnets.mgmt_subnet_cidr, 1) : null
         vlanId       = 0
-        mtu          = 8700
+        mtu          = 8896
         portGroupKey = "mgmt-domain-cl01-vds01-pg-esx-mgmt"
         activeUplinks = [
           "uplink0"
@@ -408,7 +408,7 @@ output "management_domain_deployment_input_config" {
         subnet       = module.subnets.mgmt_subnet_cidr
         gateway      = module.subnets.mgmt_subnet_cidr != null ? cidrhost(module.subnets.mgmt_subnet_cidr, 1) : null
         vlanId       = 0
-        mtu          = 8700
+        mtu          = 8896
         portGroupKey = "mgmt-domain-cl01-vds01-pg-vm-mgmt"
         activeUplinks = [
           "uplink0"
@@ -423,7 +423,7 @@ output "management_domain_deployment_input_config" {
         gateway          = module.subnets.vmotion_subnet_cidr != null ? cidrhost(module.subnets.vmotion_subnet_cidr, 1) : null
         includeIpAddress = local.sorted_vmotion_ips
         vlanId           = var.vmotion_vlan_id
-        mtu              = 8700
+        mtu              = 8896
         portGroupKey     = "mgmt-domain-cl01-vds01-pg-vmotion"
         activeUplinks = [
           "uplink0"
@@ -438,7 +438,7 @@ output "management_domain_deployment_input_config" {
         gateway          = module.subnets.vsan_subnet_cidr != null ? cidrhost(module.subnets.vsan_subnet_cidr, 1) : null
         includeIpAddress = local.sorted_vsan_ips
         vlanId           = var.vsan_vlan_id
-        mtu              = 8700
+        mtu              = 8896
         portGroupKey     = "mgmt-domain-cl01-vds01-pg-vsan"
         activeUplinks = [
           "uplink0"
