@@ -59,12 +59,12 @@ EOT
 # ------------------------------------------------------------------------------
 variable "subnet_name" {
   type        = string
-  default     = "smve-toolkit-subnet"
+  default     = "smvs-toolkit-subnet"
   description = <<EOT
 Meaning: The name of the GCP Subnetwork used for the jumpbox.
 Pre-req: If `create_subnet` is set to false, this subnetwork must already exist in the specified `vpc_name` (the VPC hosting the ESXi nodes) and `region`, with connectivity to target ESXi host(s) and available IP capacity for 1 GCE instance.
-Possible value: RFC1035 compliant GCP resource name string, e.g., "smve-toolkit-subnet" or "custom-jumpbox-subnet".
-Required or Not: Optional (defaults to "smve-toolkit-subnet").
+Possible value: RFC1035 compliant GCP resource name string, e.g., "smvs-toolkit-subnet" or "custom-jumpbox-subnet".
+Required or Not: Optional (defaults to "smvs-toolkit-subnet").
 EOT
 
   validation {
@@ -120,12 +120,12 @@ EOT
 # ------------------------------------------------------------------------------
 variable "jumpbox_name" {
   type        = string
-  default     = "smve-toolkit-jumpbox"
+  default     = "smvs-toolkit-jumpbox"
   description = <<EOT
 Meaning: The name assigned to the GCE virtual machine instance acting as the jumpbox.
 Pre-req: Must be a unique GCE instance name within the target GCP project and zone.
-Possible value: RFC1035 compliant string, e.g., "smve-toolkit-jumpbox" or "esxi-prep-jumpbox".
-Required or Not: Optional (defaults to "smve-toolkit-jumpbox").
+Possible value: RFC1035 compliant string, e.g., "smvs-toolkit-jumpbox" or "esxi-prep-jumpbox".
+Required or Not: Optional (defaults to "smvs-toolkit-jumpbox").
 EOT
 
   validation {
@@ -233,7 +233,7 @@ variable "boot_disk_image" {
   default     = "debian-cloud/debian-12"
   description = <<EOT
 Meaning: The OS boot disk image family or specific image self_link for the jumpbox VM.
-Pre-req: Must be a valid OS image available in GCP (e.g., Debian 12, Ubuntu 22.04 LTS). Debian 12 is recommended for optimal compatibility with the SMVE Toolkit.
+Pre-req: Must be a valid OS image available in GCP (e.g., Debian 12, Ubuntu 22.04 LTS). Debian 12 is recommended for optimal compatibility with the SMVS Toolkit.
 Possible value: Image family or image resource URI, e.g., "debian-cloud/debian-12", "ubuntu-os-cloud/ubuntu-2204-lts".
 Required or Not: Optional (defaults to "debian-cloud/debian-12").
 EOT

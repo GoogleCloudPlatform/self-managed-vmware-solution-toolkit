@@ -22,8 +22,8 @@ project_id = "my-gcp-project-id"
 zone       = "us-central1-a"
 
 # Jumpbox VM Instance Parameters
-jumpbox_name          = "smve-toolkit-jumpbox"
-subnet_name           = "smve-toolkit-jumpbox-subnet" # Subnet in the VPC hosting the ESXi nodes
+jumpbox_name          = "smvs-toolkit-jumpbox"
+subnet_name           = "smvs-toolkit-jumpbox-subnet" # Subnet in the VPC hosting the ESXi nodes
 service_account_email = "123456789012-compute@developer.gserviceaccount.com"
 
 # Hardware & Disk Sizing (Optional - defaults shown)

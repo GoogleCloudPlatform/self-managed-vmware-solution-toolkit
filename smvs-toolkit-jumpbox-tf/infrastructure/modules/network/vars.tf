@@ -44,7 +44,7 @@ variable "vpc_name" {
 
 variable "subnet_name" {
   type        = string
-  default     = "smve-toolkit-jumpbox-subnet"
+  default     = "smvs-toolkit-jumpbox-subnet"
   description = "The name of the subnet to create or fetch in the VPC hosting the ESXi nodes."
 
   validation {

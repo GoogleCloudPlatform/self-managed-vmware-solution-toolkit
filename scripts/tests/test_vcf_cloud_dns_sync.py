@@ -87,13 +87,13 @@ class TestHelperFunctions(unittest.TestCase):
   def test_normalize_fqdn_standard_and_dot_boundaries(self):
     # Standard short name
     self.assertEqual(
-        vcf_cloud_dns_sync.normalize_fqdn("esxi-h0", "smve.test"),
-        "esxi-h0.smve.test.",
+        vcf_cloud_dns_sync.normalize_fqdn("esxi-h0", "smvs.test"),
+        "esxi-h0.smvs.test.",
     )
     # Already qualified with target domain
     self.assertEqual(
-        vcf_cloud_dns_sync.normalize_fqdn("esxi-h0.smve.test.", "smve.test"),
-        "esxi-h0.smve.test.",
+        vcf_cloud_dns_sync.normalize_fqdn("esxi-h0.smvs.test.", "smvs.test"),
+        "esxi-h0.smvs.test.",
     )
     # Dot-boundary check: "my-test" does NOT end with ".test", so ".test." must be appended
     self.assertEqual(
@@ -181,7 +181,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
         return [
             {
                 "name": "esxi-node-1",
-                "hostname": "esxi-node-1.smve.test",
+                "hostname": "esxi-node-1.smvs.test",
                 "networkInterfaces": [
                     {"network": "projects/p/global/networks/other-vpc", "networkIP": "192.168.1.10"},
                     {"network": "projects/p/global/networks/vcf-vpc", "networkIP": "10.10.1.11"},
@@ -213,7 +213,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="projects/test-proj/global/networks/vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
     )
 
     self.assertEqual(mgr.vpc_network, "vcf-vpc")
@@ -226,7 +226,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
         any("dns policies create vcf-vpc-dns-policy" in c and "--networks=vcf-vpc" in c for c in flat_cmds)
     )
     self.assertTrue(
-        any("dns managed-zones create vcf-vpc-forward-zone" in c and "--dns-name=smve.test." in c for c in flat_cmds)
+        any("dns managed-zones create vcf-vpc-forward-zone" in c and "--dns-name=smvs.test." in c for c in flat_cmds)
     )
     self.assertTrue(
         any("dns managed-zones create vcf-vpc-reverse-zone" in c and "--dns-name=40.10.in-addr.arpa." in c for c in flat_cmds)
@@ -248,7 +248,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
     )
 
     self.assertEqual(mgr._zone_dns_names["vcf-vpc-reverse-zone"], "10.in-addr.arpa.")
@@ -321,7 +321,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
     )
 
     self.assertEqual(mgr.reverse_zones, [])
@@ -341,7 +341,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     existing_zones = [
         {
             "name": "custom-fwd-zone",
-            "dnsName": "smve.test.",
+            "dnsName": "smvs.test.",
             "privateVisibilityConfig": {
                 "networks": [{"networkUrl": "projects/p/global/networks/vcf-vpc"}]
             },
@@ -379,7 +379,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
       vcf_cloud_dns_sync.VcfDnsManager(
           project_id="test-proj",
           vpc_network="vcf-vpc",
-          domain_name="smve.test",
+          domain_name="smvs.test",
           create_missing_zones=False,
       )
 
@@ -388,7 +388,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
       vcf_cloud_dns_sync.VcfDnsManager(
           project_id="test-proj",
           vpc_network="vcf-vpc",
-          domain_name="smve.test",
+          domain_name="smvs.test",
           reverse_zones=["non-existent-rev-zone"],
           create_missing_zones=False,
       )
@@ -397,7 +397,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
         reverse_zones=["rev-10-0", "rev-10-10", "rev-10-10-1"],
         create_missing_zones=False,
     )
@@ -448,7 +448,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
         create_missing_zones=True,
     )
 
@@ -463,7 +463,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
       vcf_cloud_dns_sync.VcfDnsManager(
           project_id="test-proj",
           vpc_network="vcf-vpc",
-          domain_name="smve.test",
+          domain_name="smvs.test",
           reverse_zones=["custom-rev-without-cidr"],
           create_missing_zones=True,
       )
@@ -473,7 +473,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     existing_zones = [
         {
             "name": "vcf-vpc-forward-zone",
-            "dnsName": "smve.test.",
+            "dnsName": "smvs.test.",
             "privateVisibilityConfig": {
                 "networks": [{"networkUrl": "projects/p/global/networks/vcf-vpc"}]
             },
@@ -482,12 +482,12 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     existing_records = {
         "vcf-vpc-forward-zone": [
             # Already up-to-date record (should be skipped)
-            {"name": "esxi-node-1.smve.test.", "type": "A", "rrdatas": ["10.10.1.11"]},
+            {"name": "esxi-node-1.smvs.test.", "type": "A", "rrdatas": ["10.10.1.11"]},
             # Record with stale secondary IP (should be updated)
-            {"name": "vcenter.smve.test.", "type": "A", "rrdatas": ["10.10.1.20", "10.10.1.99"]},
+            {"name": "vcenter.smvs.test.", "type": "A", "rrdatas": ["10.10.1.20", "10.10.1.99"]},
         ],
         "vcf-vpc-reverse-zone": [
-            {"name": "11.1.10.10.in-addr.arpa.", "type": "PTR", "rrdatas": ["esxi-node-1.smve.test."]},
+            {"name": "11.1.10.10.in-addr.arpa.", "type": "PTR", "rrdatas": ["esxi-node-1.smvs.test."]},
         ],
     }
     side_effect, cmds = self._make_gcloud_router(
@@ -509,7 +509,7 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     mgr = vcf_cloud_dns_sync.VcfDnsManager(
         project_id="test-proj",
         vpc_network="vcf-vpc",
-        domain_name="smve.test",
+        domain_name="smvs.test",
     )
     mgr.sync_baremetal_nodes()
     mgr.sync_frontends()
@@ -518,16 +518,16 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
     flat_cmds = [" ".join(c) for c in cmds]
 
     # esxi-node-1 A & PTR were already up-to-date -> must NOT be created or updated
-    self.assertFalse(any("esxi-node-1.smve.test." in c and "record-sets" in c for c in flat_cmds))
+    self.assertFalse(any("esxi-node-1.smvs.test." in c and "record-sets" in c for c in flat_cmds))
 
-    # vcenter.smve.test. had a stale second IP -> must be UPDATED to 10.10.1.20
+    # vcenter.smvs.test. had a stale second IP -> must be UPDATED to 10.10.1.20
     self.assertTrue(
-        any("dns record-sets update vcenter.smve.test." in c and "--rrdatas=10.10.1.20" in c for c in flat_cmds)
+        any("dns record-sets update vcenter.smvs.test." in c and "--rrdatas=10.10.1.20" in c for c in flat_cmds)
     )
 
-    # nsx-fra-fr -> stripped to nsx-fra.smve.test. (preserving '-fra') and PTR created in upfront /8 'vcf-vpc-reverse-zone'
+    # nsx-fra-fr -> stripped to nsx-fra.smvs.test. (preserving '-fra') and PTR created in upfront /8 'vcf-vpc-reverse-zone'
     self.assertTrue(
-        any("dns record-sets create nsx-fra.smve.test." in c and "--rrdatas=10.50.2.30" in c for c in flat_cmds)
+        any("dns record-sets create nsx-fra.smvs.test." in c and "--rrdatas=10.50.2.30" in c for c in flat_cmds)
     )
     self.assertTrue(
         any("dns managed-zones create vcf-vpc-reverse-zone" in c and "--dns-name=10.in-addr.arpa." in c for c in flat_cmds)
@@ -536,14 +536,14 @@ class TestVcfDnsManagerBootstrapAndRouting(unittest.TestCase):
         any(
             "dns record-sets create 30.2.50.10.in-addr.arpa." in c
             and "--zone=vcf-vpc-reverse-zone" in c
-            and "--rrdatas=nsx-fra.smve.test." in c
+            and "--rrdatas=nsx-fra.smvs.test." in c
             for c in flat_cmds
         )
     )
 
     # NTP record created
     self.assertTrue(
-        any("dns record-sets create ntp.smve.test." in c and "--rrdatas=169.254.169.254" in c for c in flat_cmds)
+        any("dns record-sets create ntp.smvs.test." in c and "--rrdatas=169.254.169.254" in c for c in flat_cmds)
     )
 
 
@@ -553,7 +553,7 @@ class TestMainCli(unittest.TestCase):
   @mock.patch("vcf_cloud_dns_sync.VcfDnsManager")
   def test_no_action_flags_exits_without_calling_gcloud(self, mock_mgr):
     with mock.patch.object(
-        sys, "argv", ["vcf_cloud_dns_sync.py", "--vpc-network", "my-vpc", "--domain", "smve.test"]
+        sys, "argv", ["vcf_cloud_dns_sync.py", "--vpc-network", "my-vpc", "--domain", "smvs.test"]
     ):
       with self.assertRaises(SystemExit) as ctx:
         vcf_cloud_dns_sync.main()
@@ -571,7 +571,7 @@ class TestMainCli(unittest.TestCase):
             "--vpc-network",
             "my-vpc",
             "--domain",
-            "smve.test",
+            "smvs.test",
             "--sync-all",
             "--set-ntp-ip",
             "10.254.254.250",
@@ -581,7 +581,7 @@ class TestMainCli(unittest.TestCase):
       mock_mgr.assert_called_once_with(
           project_id="default-gcloud-proj",
           vpc_network="my-vpc",
-          domain_name="smve.test",
+          domain_name="smvs.test",
           forward_zone=None,
           reverse_zones=[],
           dns_policy=None,
@@ -607,7 +607,7 @@ class TestMainCli(unittest.TestCase):
             "--vpc-network",
             "my-vpc",
             "--domain",
-            "smve.test",
+            "smvs.test",
             "--no-create-dns-policy",
             "--sync-all",
         ],
@@ -616,7 +616,7 @@ class TestMainCli(unittest.TestCase):
       mock_mgr.assert_called_once_with(
           project_id="my-proj",
           vpc_network="my-vpc",
-          domain_name="smve.test",
+          domain_name="smvs.test",
           forward_zone=None,
           reverse_zones=[],
           dns_policy=None,

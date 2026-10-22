@@ -36,7 +36,7 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
+       --domain smvs.test \
        --sync-all \
        --set-ntp-ip 10.254.254.250 \
        --dry-run
@@ -51,7 +51,7 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
+       --domain smvs.test \
        --sync-all \
        --set-ntp-ip 10.254.254.250
 
@@ -61,7 +61,7 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
+       --domain smvs.test \
        --set-ntp-ip 169.254.169.254
 
 4. Day-2 Scale-Out (Adding New Z3 Hosts or Workload Domain Frontends)
@@ -70,7 +70,7 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
+       --domain smvs.test \
        --sync-all
 
 5. Bootstrap Zones & VPC Policy Only (Before Creating Nodes/Frontends)
@@ -79,8 +79,8 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
-       --reverse-zone smve-rev-10-10=10.10.0.0/16 \
+       --domain smvs.test \
+       --reverse-zone smvs-rev-10-10=10.10.0.0/16 \
        --setup-zones
 
 6. Custom Zone / Policy Names or Pre-Created Admin Resources
@@ -88,7 +88,7 @@ can be omitted from all commands below.
      python3 vcf_cloud_dns_sync.py \
        --project-id PROJECT_ID \
        --vpc-network VPC_NETWORK_NAME \
-       --domain smve.test \
+       --domain smvs.test \
        --dns-policy my-custom-dns-policy \
        --forward-zone my-custom-fwd-zone \
        --reverse-zones my-rev-zone-1=10.10.1.0/24 my-rev-zone-2=10.10.2.0/24 \
@@ -735,7 +735,7 @@ class VcfDnsManager:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Synchronize Cloud DNS & NTP for Self-Managed VMware Engine (VCF on GCP)."
+        description="Synchronize Cloud DNS & NTP for Self-Managed VMware Solution (VCF on GCP)."
     )
     parser.add_argument(
         "--project-id",
@@ -750,7 +750,7 @@ def main():
     parser.add_argument(
         "--domain",
         required=True,
-        help="Forward DNS domain name (e.g. smve.test or bm.gce)",
+        help="Forward DNS domain name (e.g. smvs.test or bm.gce)",
     )
     parser.add_argument(
         "--forward-zone",

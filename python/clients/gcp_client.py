@@ -1014,7 +1014,7 @@ class GCPClient:
           network=network,
           ip_cidr_range=ip_cidr_range,
           private_ip_google_access=True,
-          description="Subnet for SMVE Offline Depot PSC Endpoint",
+          description="Subnet for SMVS Offline Depot PSC Endpoint",
       )
       op = self._subnets_client.insert(
           project=project, region=region, subnetwork_resource=subnet_body
@@ -1189,7 +1189,7 @@ class GCPClient:
     Args:
         project: GCP Project ID.
         zone_name: Resource name of the managed DNS zone.
-        dns_name: Base domain string (e.g., 'us-central1.selfmanagedvmwareengine.goog.').
+        dns_name: Base domain string.
         network_uri: Full or partial VPC network URI.
         a_record_fqdn: Fully qualified domain name for A record.
         target_ip: Target IPv4 address for the PSC endpoint.
@@ -1234,7 +1234,7 @@ class GCPClient:
         create_payload = {
             "name": zone_name,
             "dnsName": clean_dns_name,
-            "description": "Private DNS Zone for SMVE Offline Depot",
+            "description": "Private DNS Zone for SMVS Offline Depot",
             "visibility": constants.OfflineDepotDefaults.DNS_VISIBILITY_PRIVATE if hasattr(constants.OfflineDepotDefaults, "DNS_VISIBILITY_PRIVATE") else "private",
             "privateVisibilityConfig": {
                 "networks": [{"networkUrl": full_net_url}]
@@ -1343,7 +1343,7 @@ class GCPClient:
     credentials.
 
     Args:
-        project_id: Alphanumeric GCP project ID (e.g. 'my-smve-project').
+        project_id: Alphanumeric GCP project ID (e.g. 'my-smvs-project').
 
     Returns:
         String representation of the numeric project number (e.g. '123456789012').

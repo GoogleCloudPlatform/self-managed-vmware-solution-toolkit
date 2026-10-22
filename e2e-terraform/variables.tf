@@ -192,24 +192,7 @@ variable "mgmt_neg_name" {
   description = "Resource name of the Management NIC Network Endpoint Group (NEG). Created if create_subnets_and_negs is true (defaults to '<resource_name_prefix>-mgmt-neg' if null). Expected to exist in GCP if create_subnets_and_negs is false."
 }
 
-# 3.2 vSAN Storage Subnet
-variable "vsan_subnet_name" {
-  type        = string
-  default     = null
-  description = "Name of the vSAN storage subnetwork. Expected to exist in GCP if create_subnets_and_negs is false. Defaults to '<resource_name_prefix>-vsan-subnet' if null."
-}
-
-variable "vsan_subnet_cidr" {
-  type        = string
-  default     = null
-  description = "IPv4 CIDR range for the vSAN storage subnetwork (required if create_subnets_and_negs = true)."
-  validation {
-    condition     = var.vsan_subnet_cidr == null || can(cidrnetmask(var.vsan_subnet_cidr))
-    error_message = "vsan_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.1.0/24)."
-  }
-}
-
-# 3.3 vMotion Migration Subnet
+# 3.2 vMotion Migration Subnet
 variable "vmotion_subnet_name" {
   type        = string
   default     = null
@@ -222,7 +205,24 @@ variable "vmotion_subnet_cidr" {
   description = "IPv4 CIDR range for the vMotion migration subnetwork (required if create_subnets_and_negs = true)."
   validation {
     condition     = var.vmotion_subnet_cidr == null || can(cidrnetmask(var.vmotion_subnet_cidr))
-    error_message = "vmotion_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.2.0/24)."
+    error_message = "vmotion_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.1.0/24)."
+  }
+}
+
+# 3.3 vSAN Storage Subnet
+variable "vsan_subnet_name" {
+  type        = string
+  default     = null
+  description = "Name of the vSAN storage subnetwork. Expected to exist in GCP if create_subnets_and_negs is false. Defaults to '<resource_name_prefix>-vsan-subnet' if null."
+}
+
+variable "vsan_subnet_cidr" {
+  type        = string
+  default     = null
+  description = "IPv4 CIDR range for the vSAN storage subnetwork (required if create_subnets_and_negs = true)."
+  validation {
+    condition     = var.vsan_subnet_cidr == null || can(cidrnetmask(var.vsan_subnet_cidr))
+    error_message = "vsan_subnet_cidr must be a valid IPv4 CIDR string (e.g. 10.0.2.0/24)."
   }
 }
 
@@ -374,38 +374,7 @@ variable "mgmt_nic_ip_values" {
   }
 }
 
-# 4.2 vSAN NIC Configuration
-variable "vsan_vlan_id" {
-  type        = number
-  default     = 3
-  description = "VLAN ID tag assigned to the vSAN network interface (allowed range: 2 to 255)."
-  validation {
-    condition     = var.vsan_vlan_id >= 2 && var.vsan_vlan_id <= 255
-    error_message = "vsan_vlan_id must be between 2 and 255."
-  }
-}
-
-variable "vsan_ip_address_type" {
-  type        = string
-  default     = "ephemeral_automatic"
-  description = "IP mode for vSAN NIC: 'ephemeral_automatic', 'ephemeral_custom', 'reserved_automatic', 'reserved_custom'."
-  validation {
-    condition     = contains(["ephemeral_automatic", "ephemeral_custom", "reserved_automatic", "reserved_custom"], var.vsan_ip_address_type)
-    error_message = "vsan_ip_address_type must be one of: ephemeral_automatic, ephemeral_custom, reserved_automatic, reserved_custom."
-  }
-}
-
-variable "vsan_ip_values" {
-  type        = list(string)
-  default     = []
-  description = "List of explicit IPv4 address strings for vSAN NICs in vsan_subnet_cidr (e.g. ['10.200.1.3', '10.200.1.4']). Required when vsan_ip_address_type is custom ('ephemeral_custom' or 'reserved_custom') and must contain number_of_nodes entries. Leave empty ([]) for automatic modes ('ephemeral_automatic' or 'reserved_automatic')."
-  validation {
-    condition     = alltrue([for ip in var.vsan_ip_values : ip != null && ip != "" && can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", ip))])
-    error_message = "All elements in vsan_ip_values must be valid non-empty IPv4 address strings."
-  }
-}
-
-# 4.3 vMotion NIC Configuration
+# 4.2 vMotion NIC Configuration
 variable "vmotion_vlan_id" {
   type        = number
   default     = 2
@@ -429,10 +398,41 @@ variable "vmotion_ip_address_type" {
 variable "vmotion_ip_values" {
   type        = list(string)
   default     = []
-  description = "List of explicit IPv4 address strings for vMotion NICs in vmotion_subnet_cidr (e.g. ['10.200.2.3', '10.200.2.4']). Required when vmotion_ip_address_type is custom ('ephemeral_custom' or 'reserved_custom') and must contain number_of_nodes entries. Leave empty ([]) for automatic modes ('ephemeral_automatic' or 'reserved_automatic')."
+  description = "List of explicit IPv4 address strings for vMotion NICs in vmotion_subnet_cidr (e.g. ['10.200.1.3', '10.200.1.4']). Required when vmotion_ip_address_type is custom ('ephemeral_custom' or 'reserved_custom') and must contain number_of_nodes entries. Leave empty ([]) for automatic modes ('ephemeral_automatic' or 'reserved_automatic')."
   validation {
     condition     = alltrue([for ip in var.vmotion_ip_values : ip != null && ip != "" && can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", ip))])
     error_message = "All elements in vmotion_ip_values must be valid non-empty IPv4 address strings."
+  }
+}
+
+# 4.3 vSAN NIC Configuration
+variable "vsan_vlan_id" {
+  type        = number
+  default     = 3
+  description = "VLAN ID tag assigned to the vSAN network interface (allowed range: 2 to 255)."
+  validation {
+    condition     = var.vsan_vlan_id >= 2 && var.vsan_vlan_id <= 255
+    error_message = "vsan_vlan_id must be between 2 and 255."
+  }
+}
+
+variable "vsan_ip_address_type" {
+  type        = string
+  default     = "ephemeral_automatic"
+  description = "IP mode for vSAN NIC: 'ephemeral_automatic', 'ephemeral_custom', 'reserved_automatic', 'reserved_custom'."
+  validation {
+    condition     = contains(["ephemeral_automatic", "ephemeral_custom", "reserved_automatic", "reserved_custom"], var.vsan_ip_address_type)
+    error_message = "vsan_ip_address_type must be one of: ephemeral_automatic, ephemeral_custom, reserved_automatic, reserved_custom."
+  }
+}
+
+variable "vsan_ip_values" {
+  type        = list(string)
+  default     = []
+  description = "List of explicit IPv4 address strings for vSAN NICs in vsan_subnet_cidr (e.g. ['10.200.2.3', '10.200.2.4']). Required when vsan_ip_address_type is custom ('ephemeral_custom' or 'reserved_custom') and must contain number_of_nodes entries. Leave empty ([]) for automatic modes ('ephemeral_automatic' or 'reserved_automatic')."
+  validation {
+    condition     = alltrue([for ip in var.vsan_ip_values : ip != null && ip != "" && can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", ip))])
+    error_message = "All elements in vsan_ip_values must be valid non-empty IPv4 address strings."
   }
 }
 

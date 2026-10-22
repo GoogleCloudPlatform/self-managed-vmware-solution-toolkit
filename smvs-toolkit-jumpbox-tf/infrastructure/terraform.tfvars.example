@@ -42,7 +42,7 @@ subnet_cidr   = "10.1.100.0/29" # Min /29 CIDR required when creating new subnet
 enable_internet = true
 
 # Jumpbox Settings
-jumpbox_name          = "vcf-mgmt-sample-jumpbox"  # Optional: defaults to "smve-toolkit-jumpbox"
+jumpbox_name          = "vcf-mgmt-sample-jumpbox"  # Optional: defaults to "smvs-toolkit-jumpbox"
 machine_type          = "e2-micro"              # Optional: defaults to "e2-micro"
 boot_disk_size        = 30                      # Optional: size in GB (defaults to 30, min 10 GB)
 boot_disk_type        = "pd-balanced"           # Optional: defaults to "pd-balanced" (options: "pd-standard", "pd-balanced", "pd-ssd", "pd-extreme")

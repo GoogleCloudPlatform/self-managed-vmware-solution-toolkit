@@ -62,19 +62,19 @@ locals {
   mgmt_cidr_mask      = length(local.mgmt_cidr_parts) == 2 ? parseint(local.mgmt_cidr_parts[1], 10) : 0
   mgmt_cidr_end_int   = local.mgmt_cidr_start_int + (local.mgmt_cidr_mask > 0 ? pow(2, 32 - local.mgmt_cidr_mask) : 0)
 
-  # vSAN Subnet CIDR Range Bounds for Validation
-  vsan_cidr_parts     = (var.vsan_subnet_cidr != null && var.vsan_subnet_cidr != "" && can(cidrnetmask(var.vsan_subnet_cidr))) ? split("/", var.vsan_subnet_cidr) : []
-  vsan_cidr_octets    = length(local.vsan_cidr_parts) == 2 ? [for o in split(".", local.vsan_cidr_parts[0]) : parseint(o, 10)] : []
-  vsan_cidr_start_int = length(local.vsan_cidr_octets) == 4 ? (local.vsan_cidr_octets[0] * 16777216 + local.vsan_cidr_octets[1] * 65536 + local.vsan_cidr_octets[2] * 256 + local.vsan_cidr_octets[3]) : 0
-  vsan_cidr_mask      = length(local.vsan_cidr_parts) == 2 ? parseint(local.vsan_cidr_parts[1], 10) : 0
-  vsan_cidr_end_int   = local.vsan_cidr_start_int + (local.vsan_cidr_mask > 0 ? pow(2, 32 - local.vsan_cidr_mask) : 0)
-
   # vMotion Subnet CIDR Range Bounds for Validation
   vmotion_cidr_parts     = (var.vmotion_subnet_cidr != null && var.vmotion_subnet_cidr != "" && can(cidrnetmask(var.vmotion_subnet_cidr))) ? split("/", var.vmotion_subnet_cidr) : []
   vmotion_cidr_octets    = length(local.vmotion_cidr_parts) == 2 ? [for o in split(".", local.vmotion_cidr_parts[0]) : parseint(o, 10)] : []
   vmotion_cidr_start_int = length(local.vmotion_cidr_octets) == 4 ? (local.vmotion_cidr_octets[0] * 16777216 + local.vmotion_cidr_octets[1] * 65536 + local.vmotion_cidr_octets[2] * 256 + local.vmotion_cidr_octets[3]) : 0
   vmotion_cidr_mask      = length(local.vmotion_cidr_parts) == 2 ? parseint(local.vmotion_cidr_parts[1], 10) : 0
   vmotion_cidr_end_int   = local.vmotion_cidr_start_int + (local.vmotion_cidr_mask > 0 ? pow(2, 32 - local.vmotion_cidr_mask) : 0)
+
+  # vSAN Subnet CIDR Range Bounds for Validation
+  vsan_cidr_parts     = (var.vsan_subnet_cidr != null && var.vsan_subnet_cidr != "" && can(cidrnetmask(var.vsan_subnet_cidr))) ? split("/", var.vsan_subnet_cidr) : []
+  vsan_cidr_octets    = length(local.vsan_cidr_parts) == 2 ? [for o in split(".", local.vsan_cidr_parts[0]) : parseint(o, 10)] : []
+  vsan_cidr_start_int = length(local.vsan_cidr_octets) == 4 ? (local.vsan_cidr_octets[0] * 16777216 + local.vsan_cidr_octets[1] * 65536 + local.vsan_cidr_octets[2] * 256 + local.vsan_cidr_octets[3]) : 0
+  vsan_cidr_mask      = length(local.vsan_cidr_parts) == 2 ? parseint(local.vsan_cidr_parts[1], 10) : 0
+  vsan_cidr_end_int   = local.vsan_cidr_start_int + (local.vsan_cidr_mask > 0 ? pow(2, 32 - local.vsan_cidr_mask) : 0)
 
   # NSX TEP Subnet CIDR Range Bounds for Validation
   nsx_tep_cidr_parts     = (var.nsx_tep_subnet_cidr != null && var.nsx_tep_subnet_cidr != "" && can(cidrnetmask(var.nsx_tep_subnet_cidr))) ? split("/", var.nsx_tep_subnet_cidr) : []
@@ -147,18 +147,6 @@ module "mgmt_ip_allocator" {
   ip_values             = var.mgmt_ip_values
 }
 
-module "vsan_ip_allocator" {
-  source                = "../ip_allocator"
-  project_id            = var.project_id
-  region                = var.region
-  subnetwork            = var.vsan_subnet_name
-  resource_name_prefix  = ""
-  address_name_template = "%s%s-vsan-ip"
-  ip_address_type       = var.vsan_ip_address_type
-  entities              = local.effective_node_names
-  ip_values             = var.vsan_ip_values
-}
-
 module "vmotion_ip_allocator" {
   source                = "../ip_allocator"
   project_id            = var.project_id
@@ -169,6 +157,18 @@ module "vmotion_ip_allocator" {
   ip_address_type       = var.vmotion_ip_address_type
   entities              = local.effective_node_names
   ip_values             = var.vmotion_ip_values
+}
+
+module "vsan_ip_allocator" {
+  source                = "../ip_allocator"
+  project_id            = var.project_id
+  region                = var.region
+  subnetwork            = var.vsan_subnet_name
+  resource_name_prefix  = ""
+  address_name_template = "%s%s-vsan-ip"
+  ip_address_type       = var.vsan_ip_address_type
+  entities              = local.effective_node_names
+  ip_values             = var.vsan_ip_values
 }
 
 module "nsx_tep_ip_allocator" {
@@ -290,20 +290,20 @@ resource "google_compute_instance" "nodes" {
     network_ip = module.mgmt_ip_allocator.effective_ip_map[each.key]
   }
 
-  # vSAN NIC
-  network_interface {
-    subnetwork = var.vsan_subnet_name
-    vlan       = var.vsan_vlan_id
-    stack_type = "IPV4_ONLY"
-    network_ip = module.vsan_ip_allocator.effective_ip_map[each.key]
-  }
-
   # vMotion NIC
   network_interface {
     subnetwork = var.vmotion_subnet_name
     vlan       = var.vmotion_vlan_id
     stack_type = "IPV4_ONLY"
     network_ip = module.vmotion_ip_allocator.effective_ip_map[each.key]
+  }
+
+  # vSAN NIC
+  network_interface {
+    subnetwork = var.vsan_subnet_name
+    vlan       = var.vsan_vlan_id
+    stack_type = "IPV4_ONLY"
+    network_ip = module.vsan_ip_allocator.effective_ip_map[each.key]
   }
 
   # NSX TEP NIC
@@ -425,15 +425,15 @@ check "custom_ip_counts" {
   assert {
     condition = (
       (!contains(["ephemeral_custom", "reserved_custom"], var.mgmt_ip_address_type) ? (length(var.mgmt_ip_values) == 0 || length(var.mgmt_ip_values) == var.number_of_nodes) : length(var.mgmt_ip_values) == var.number_of_nodes) &&
-      (!contains(["ephemeral_custom", "reserved_custom"], var.vsan_ip_address_type) ? (length(var.vsan_ip_values) == 0 || length(var.vsan_ip_values) == var.number_of_nodes) : length(var.vsan_ip_values) == var.number_of_nodes) &&
       (!contains(["ephemeral_custom", "reserved_custom"], var.vmotion_ip_address_type) ? (length(var.vmotion_ip_values) == 0 || length(var.vmotion_ip_values) == var.number_of_nodes) : length(var.vmotion_ip_values) == var.number_of_nodes) &&
+      (!contains(["ephemeral_custom", "reserved_custom"], var.vsan_ip_address_type) ? (length(var.vsan_ip_values) == 0 || length(var.vsan_ip_values) == var.number_of_nodes) : length(var.vsan_ip_values) == var.number_of_nodes) &&
       (!contains(["ephemeral_custom", "reserved_custom"], var.nsx_tep_ip_address_type) ? (length(var.nsx_tep_ip_values) == 0 || length(var.nsx_tep_ip_values) == var.number_of_nodes) : length(var.nsx_tep_ip_values) == var.number_of_nodes) &&
       alltrue([
         for nic in var.additional_dynamic_nics :
         contains(["ephemeral_custom", "reserved_custom"], nic.ip_address_type) ? (nic.ip_values != null && length(nic.ip_values) == var.number_of_nodes) : (nic.ip_values == null || length(nic.ip_values) == 0 || length(nic.ip_values) == var.number_of_nodes)
       ])
     )
-    error_message = "When an IP allocation mode is set to 'ephemeral_custom' or 'reserved_custom', the corresponding ip_values list (mgmt_ip_values, vsan_ip_values, vmotion_ip_values, nsx_tep_ip_values) must contain at least number_of_nodes (${var.number_of_nodes}) entries."
+    error_message = "When an IP allocation mode is set to 'ephemeral_custom' or 'reserved_custom', the corresponding ip_values list (mgmt_ip_values, vmotion_ip_values, vsan_ip_values, nsx_tep_ip_values) must contain at least number_of_nodes (${var.number_of_nodes}) entries."
   }
 }
 
@@ -461,10 +461,10 @@ check "validate_host_dns_zones" {
 check "vlan_id_uniqueness" {
   assert {
     condition = length(distinct(concat(
-      [var.vsan_vlan_id, var.vmotion_vlan_id, var.nsx_tep_vlan_id],
+      [var.vmotion_vlan_id, var.vsan_vlan_id, var.nsx_tep_vlan_id],
       [for nic in var.additional_dynamic_nics : nic.vlan_id]
     ))) == 3 + length(var.additional_dynamic_nics)
-    error_message = "All configured VLAN IDs (vSAN: ${var.vsan_vlan_id}, vMotion: ${var.vmotion_vlan_id}, NSX TEP: ${var.nsx_tep_vlan_id}, and dynamic NICs) must be distinct."
+    error_message = "All configured VLAN IDs (vMotion: ${var.vmotion_vlan_id}, vSAN: ${var.vsan_vlan_id}, NSX TEP: ${var.nsx_tep_vlan_id}, and dynamic NICs) must be distinct."
   }
 }
 
@@ -485,23 +485,6 @@ check "validate_mgmt_ips_in_subnet" {
   }
 }
 
-check "validate_vsan_ips_in_subnet" {
-  assert {
-    condition = (
-      (var.vsan_subnet_cidr == null || var.vsan_subnet_cidr == "") ? true : (
-        alltrue([
-          for ip in var.vsan_ip_values :
-          (ip == "" || !can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", ip))) ? true : (
-            (parseint(split(".", ip)[0], 10) * 16777216 + parseint(split(".", ip)[1], 10) * 65536 + parseint(split(".", ip)[2], 10) * 256 + parseint(split(".", ip)[3], 10)) >= local.vsan_cidr_start_int &&
-            (parseint(split(".", ip)[0], 10) * 16777216 + parseint(split(".", ip)[1], 10) * 65536 + parseint(split(".", ip)[2], 10) * 256 + parseint(split(".", ip)[3], 10)) < local.vsan_cidr_end_int
-          )
-        ])
-      )
-    )
-    error_message = "Configured vSAN IP addresses in vsan_ip_values do not belong to the vSAN subnet CIDR (${var.vsan_subnet_cidr != null ? var.vsan_subnet_cidr : ""})."
-  }
-}
-
 check "validate_vmotion_ips_in_subnet" {
   assert {
     condition = (
@@ -516,6 +499,23 @@ check "validate_vmotion_ips_in_subnet" {
       )
     )
     error_message = "Configured vMotion IP addresses in vmotion_ip_values do not belong to the vMotion subnet CIDR (${var.vmotion_subnet_cidr != null ? var.vmotion_subnet_cidr : ""})."
+  }
+}
+
+check "validate_vsan_ips_in_subnet" {
+  assert {
+    condition = (
+      (var.vsan_subnet_cidr == null || var.vsan_subnet_cidr == "") ? true : (
+        alltrue([
+          for ip in var.vsan_ip_values :
+          (ip == "" || !can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", ip))) ? true : (
+            (parseint(split(".", ip)[0], 10) * 16777216 + parseint(split(".", ip)[1], 10) * 65536 + parseint(split(".", ip)[2], 10) * 256 + parseint(split(".", ip)[3], 10)) >= local.vsan_cidr_start_int &&
+            (parseint(split(".", ip)[0], 10) * 16777216 + parseint(split(".", ip)[1], 10) * 65536 + parseint(split(".", ip)[2], 10) * 256 + parseint(split(".", ip)[3], 10)) < local.vsan_cidr_end_int
+          )
+        ])
+      )
+    )
+    error_message = "Configured vSAN IP addresses in vsan_ip_values do not belong to the vSAN subnet CIDR (${var.vsan_subnet_cidr != null ? var.vsan_subnet_cidr : ""})."
   }
 }
 
