@@ -416,17 +416,7 @@ def run_pipeline(
                   constants.DeployerDefaults.POWER_ON_TIMEOUT_SECONDS
               ),
           )
-
-          # Phase 3f: Bypass vSAN HCL & Disk Claiming Validation on Cloud Builder
-          retry_with_backoff(
-              vm_mgr.bypass_vcf_hcl_disk_validation,
-              vcf_ip=ctx.vcf_installer_ip,
-              root_pwd=ctx.vcf_appliance_root_password,
-              local_pwd=ctx.vcf_appliance_local_password,
-              appliance_user=ctx.vcf_appliance_local_user,
-              timeout_seconds=180,
-              poll_interval_seconds=5,
-          )
+          
       finally:
         esxi_cli.disconnect()
     else:

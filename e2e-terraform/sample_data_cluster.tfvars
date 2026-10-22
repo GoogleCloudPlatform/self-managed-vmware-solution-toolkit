@@ -288,8 +288,10 @@ machine_type = "z3-highmem-192-highlssd-metal"
 
 # Description: Full resource URI of the ESXi OS boot disk image for bare-metal host instances.
 # Valid Values: Valid full ESXi image URI matching projects/<project>/global/images/<image-name>.
+# The image path shared in this sample is a valid image. In order to find out the latest esxi image in this project,
+# run "gcloud compute images describe-from-family astra-vcf-9-1-1 --project=smve-prod-public-images".
 # Default Value: None (Required)
-esxi_image = "projects/smve-prod-offline-depot/global/images/esxi-9-1-0-25557999-20260921"
+esxi_image = "projects/smve-prod-public-images/global/images/esxi-9-1-1-25782009-v20261020"
 
 # Description: Domain name matching the existing VCF Domain for consistent FQDN resolution and DNS record registration.
 # Valid Values: Non-empty domain string (e.g., "gcve-vcf.test.gve.", "vcf.corp.local.").
