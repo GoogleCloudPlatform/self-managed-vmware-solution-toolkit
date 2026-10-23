@@ -463,7 +463,8 @@ output "management_domain_deployment_input_config" {
         vsanDedup          = false
         failuresToTolerate = 1
         esaConfig = {
-          enabled = true
+          enabled              = true
+          skipHclAutoDiskClaim = true
         }
         encryptionConfig = {
           dataInTransitConfig = {

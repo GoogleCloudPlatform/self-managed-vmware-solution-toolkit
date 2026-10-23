@@ -211,6 +211,7 @@ FIELD_ORDERS: Dict[str, List[str]] = {
     ],
     "esaConfig": [
         "enabled",
+        "skipHclAutoDiskClaim",
     ],
     "encryptionConfig": [
         "dataInTransitConfig",

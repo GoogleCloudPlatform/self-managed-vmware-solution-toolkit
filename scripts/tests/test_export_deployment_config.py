@@ -268,7 +268,7 @@ class TestReorderObject(unittest.TestCase):
                 "datastoreName": "vsanDatastore",
                 "encryptionConfig": {"dataInTransitConfig": {"enable": False}},
                 "vsanDedup": False,
-                "esaConfig": {"enabled": True},
+                "esaConfig": {"skipHclAutoDiskClaim": True, "enabled": True},
             }
         },
         "vspClusterSpec": {
@@ -313,7 +313,9 @@ class TestReorderObject(unittest.TestCase):
         list(vsan.keys()),
         ["datastoreName", "vsanDedup", "failuresToTolerate", "esaConfig", "encryptionConfig"],
     )
-    self.assertEqual(list(vsan["esaConfig"].keys()), ["enabled"])
+    self.assertEqual(
+        list(vsan["esaConfig"].keys()), ["enabled", "skipHclAutoDiskClaim"]
+    )
     self.assertEqual(
         list(vsan["encryptionConfig"]["dataInTransitConfig"].keys()), ["enable"]
     )
