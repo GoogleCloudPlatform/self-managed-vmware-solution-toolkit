@@ -111,7 +111,7 @@ class TestVMDeployer(unittest.TestCase):
         'oe:key="vami.DNS.SDDC-Manager" oe:value="169.254.169.254"', xml_str
     )
     self.assertIn(
-        'oe:key="guestinfo.ntp" oe:value="ntp.lab.local"', xml_str
+        'oe:key="guestinfo.ntp" oe:value="169.254.169.254"', xml_str
     )
 
     xml_str_custom_dns = self.vm_dep._marshal_ovf_properties(
@@ -276,7 +276,7 @@ class TestVMDeployer(unittest.TestCase):
         'oe:key="vami.DNS.SDDC-Manager" oe:value="169.254.169.254"', payload
     )
     self.assertIn(
-        'oe:key="guestinfo.ntp" oe:value="ntp.lab.local"', payload
+        'oe:key="guestinfo.ntp" oe:value="169.254.169.254"', payload
     )
 
   @mock.patch.object(vm_deployer.VMDeployer, "_inject_guestinfo")
@@ -301,7 +301,7 @@ class TestVMDeployer(unittest.TestCase):
         'oe:key="vami.DNS.SDDC-Manager" oe:value="10.0.0.2"', payload
     )
     self.assertIn(
-        'oe:key="guestinfo.ntp" oe:value="ntp.lab.local"', payload
+        'oe:key="guestinfo.ntp" oe:value="169.254.169.254"', payload
     )
 
   @mock.patch.object(vm_deployer.VMDeployer, "_poll_for_guest_ip")

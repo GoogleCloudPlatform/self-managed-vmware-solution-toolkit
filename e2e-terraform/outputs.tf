@@ -300,7 +300,7 @@ output "management_domain_deployment_input_config" {
     }
 
     ntpServers = [
-      "ntp.${local.domain}"
+      "169.254.169.254"
     ]
 
     hostSpecs = local.sorted_host_specs
