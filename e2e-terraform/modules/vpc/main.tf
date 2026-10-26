@@ -230,7 +230,10 @@ resource "google_dns_policy" "dns_policy" {
     network_url = local.vpc_network_self_link
   }
 
-  depends_on = [google_compute_network.vpc]
+  depends_on = [
+    google_compute_network.vpc,
+    google_compute_subnetwork.gcp_subnet,
+  ]
 }
 
 # Wait for GCP to asynchronously allocate and reserve Cloud DNS Inbound Forwarding IP addresses in the subnetworks
