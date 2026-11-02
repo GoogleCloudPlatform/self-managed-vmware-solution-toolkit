@@ -120,7 +120,8 @@ module "hosts" {
   deployment_mode      = var.deployment_mode
   number_of_nodes      = var.number_of_nodes
   machine_type         = var.machine_type
-  # Full ESXi image resource URI must be provided (e.g. 'projects/<project>/global/images/<image-name>')
+  # Full ESXi image resource URI: an image family ('projects/<project>/global/images/family/<family>') or an
+  # exact image ('projects/<project>/global/images/<image-name>'); see variables.tf for when to use which.
   esxi_image              = var.esxi_image
   node_names              = var.node_names
   domain_name             = var.domain_name

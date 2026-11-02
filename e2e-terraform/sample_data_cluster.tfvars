@@ -287,11 +287,24 @@ number_of_nodes = 3
 machine_type = "z3-highmem-192-highlssd-metal"
 
 # Description: Full resource URI of the ESXi OS boot disk image for bare-metal host instances.
-# Valid Values: Valid full ESXi image URI matching projects/<project>/global/images/<image-name>.
-# The image path shared in this sample is a valid image. In order to find out the latest esxi image in this project,
-# run "gcloud compute images describe-from-family astra-vcf-9-1-1 --project=smve-prod-public-images".
+# Valid Values: projects/<project>/global/images/<image-name> or projects/<project>/global/images/family/<family-name>.
+# When this data cluster joins an EXISTING VCF instance, or when running a Day-2 node expansion, use the exact
+#   image of the hosts already running there (see below) so every host shares one ESXi build. Use the image family
+#   below only when the management domain is being deployed at the same time from the same family; it resolves to
+#   the newest non-deprecated daily rebuild of a qualified ESXi build of the VCF 9.1.1 line when a boot disk is created:
+#   gcloud compute images describe-from-family astra-vcf-9-1-1 --project=smve-prod-public-images
+# Pin an exact image (projects/smve-prod-public-images/global/images/esxi-<M>-<m>-<p>-<build>-v<YYYYMMDD>) whenever
+#   all hosts must share one ESXi build: the family can advance to a newer qualified ESXi build of the same line,
+#   and vLCM requires hosts added to an existing cluster (or a new cluster joining an existing VCF instance) to
+#   match the image already running there. Read the image of an existing host with:
+#   gcloud compute disks describe <node-name>-boot-disk --zone=<zone> --project=<project> --format='value(sourceImage)'
+# Existing boot disks are never re-created when this value changes (lifecycle.ignore_changes on
+#   google_compute_disk.boot_disks in modules/hosts/main.tf); only nodes added afterwards use the new value.
+#   To rebuild one node on purpose, first apply deletion_protection = false (this sample sets it to true; the
+#   replacement cascades to the instance and the provider refuses to destroy a protected instance in the same
+#   run), then: terraform apply -replace='module.hosts.google_compute_disk.boot_disks["<node-name>"]'
 # Default Value: None (Required)
-esxi_image = "projects/smve-prod-public-images/global/images/esxi-9-1-1-25782009-v20261020"
+esxi_image = "projects/smve-prod-public-images/global/images/family/astra-vcf-9-1-1"
 
 # Description: Domain name matching the existing VCF Domain for consistent FQDN resolution and DNS record registration.
 # Valid Values: Non-empty domain string (e.g., "gcve-vcf.test.gve.", "vcf.corp.local.").

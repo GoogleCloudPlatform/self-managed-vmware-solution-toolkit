@@ -70,10 +70,10 @@ variable "machine_type" {
 
 variable "esxi_image" {
   type        = string
-  description = "Full resource URI of the ESXi OS image for bare-metal host instances (e.g. 'projects/<project>/global/images/<image-name>'). Must be a valid full ESXi image resource URI."
+  description = "Full resource URI of the ESXi OS image for bare-metal host instances: an image family (recommended for a new management domain, e.g. 'projects/smve-prod-public-images/global/images/family/astra-vcf-9-1-1', resolved to the newest non-deprecated image when a boot disk is created) or an exact image (e.g. 'projects/smve-prod-public-images/global/images/esxi-9-1-1-25782009-v<YYYYMMDD>'; pin the image of the existing hosts when adding nodes to an existing cluster)."
   validation {
     condition     = can(regex("^(?:https://www\\.googleapis\\.com/compute/v1/)?projects/[^/]+/global/images/.+$", var.esxi_image))
-    error_message = "esxi_image must be a valid full ESXi image resource URI (e.g. 'projects/<project>/global/images/vmware-esxi-9-1-0-dm-v20260513' or 'projects/<project>/global/images/esxi-8-0-2-12345678')."
+    error_message = "esxi_image must be a valid full ESXi image resource URI: an image family such as 'projects/smve-prod-public-images/global/images/family/astra-vcf-9-1-1' or an exact image such as 'projects/smve-prod-public-images/global/images/esxi-9-1-1-25782009-v<YYYYMMDD>'."
   }
 }
 

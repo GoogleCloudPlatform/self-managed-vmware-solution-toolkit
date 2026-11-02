@@ -230,6 +230,20 @@ resource "google_compute_disk" "boot_disks" {
   labels = {
     gcve-node = "true"
   }
+
+  # The image is resolved only when a boot disk is created. When esxi_image is an image family (or a pin is
+  # updated later), the provider cannot prove the resolved image is unchanged and would otherwise plan to
+  # replace every boot disk (destroying the ESXi hosts) on the next apply. Existing disks therefore keep their
+  # image; only nodes added afterwards are created from the current value. Because a family can advance to a
+  # newer qualified ESXi build, pin an exact image when adding hosts to an existing cluster (vLCM requires one
+  # build per cluster). To rebuild one node intentionally (the replacement cascades to the instance, so its
+  # deletion_protection must already be false — apply that change first if needed):
+  #   terraform apply -replace='module.hosts.google_compute_disk.boot_disks["<node-name>"]'
+  lifecycle {
+    ignore_changes = [
+      image,
+    ]
+  }
 }
 
 resource "google_compute_instance" "nodes" {

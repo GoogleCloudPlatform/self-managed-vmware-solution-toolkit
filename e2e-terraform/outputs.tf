@@ -286,7 +286,10 @@ output "python_scripts_input_config" {
 
 output "management_domain_deployment_input_config" {
   value = {
-    version         = can(regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) ? join(".", regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) : (can(regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) ? "${join(".", regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image))}.0" : "<user_should_input>")
+    # VCF version "M.m.p.0" for the bringup spec, derived from the ESXi image reference: an image family
+    # astra-vcf-M-m-p names the VCF line directly; an exact image name esxi-M-m-p[-u]-<build>-... is parsed
+    # as before; anything else must be filled in by the user.
+    version         = can(regex("/family/astra-vcf-([0-9]+)-([0-9]+)-([0-9]+)$", var.esxi_image)) ? "${join(".", regex("/family/astra-vcf-([0-9]+)-([0-9]+)-([0-9]+)$", var.esxi_image))}.0" : (can(regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) ? join(".", regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) : (can(regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image)) ? "${join(".", regex("esxi-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-([0-9a-zA-Z]{1,3})-", var.esxi_image))}.0" : "<user_should_input>"))
     vcfInstanceName = "vcf1"
     sddcId          = "mgmt-domain"
     ceipEnabled     = false
